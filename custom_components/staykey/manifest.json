@@ -1,15 +1,20 @@
 {
   "domain": "staykey",
   "name": "StayKey",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "documentation": "https://gitlab.com/staykey/backend/staykey-ha-plugin",
   "issue_tracker": "https://gitlab.com/staykey/backend/staykey-ha-plugin/-/issues",
   "requirements": [],
-  "after_dependencies": ["zwave_js"],
-  "codeowners": ["@staykey"],
+  "after_dependencies": [
+    "zwave_js"
+  ],
+  "codeowners": [
+    "@staykey"
+  ],
   "iot_class": "cloud_push",
   "integration_type": "service",
   "config_flow": true,
-  "loggers": ["custom_components.staykey"]
+  "loggers": [
+    "custom_components.staykey"
+  ]
 }
-

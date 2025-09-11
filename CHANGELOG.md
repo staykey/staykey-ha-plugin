@@ -1,3 +1,13 @@
+## 1.0.0 (2025-09-11)
+
+
+### Bug Fixes
+
+* update readme ([fc39c41](https://github.com/staykey/staykey-ha-plugin/commit/fc39c41a9dd1d898ea13cddbfcce75841ab72d39))
+* update semver release workflow ([0dee7e9](https://github.com/staykey/staykey-ha-plugin/commit/0dee7e9477f84024d08f3497ddb07605a96cf2aa))
+* update semver release workflow ([ecef917](https://github.com/staykey/staykey-ha-plugin/commit/ecef917694a4b966a7dbe357a3e5f829dea4f66e))
+* update semver release workflow ([5194dd9](https://github.com/staykey/staykey-ha-plugin/commit/5194dd9f07cd1fcc300169e145fdc93c227d76eb))
+
 # Changelog
 
 All notable changes to this project will be documented in this file.
