@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 from typing import Any, Callable, Dict, Optional
+import re
 
 from aiohttp import ClientError
 from homeassistant.config_entries import ConfigEntry
@@ -13,6 +14,10 @@ from homeassistant.const import CONF_URL
 from homeassistant.core import HomeAssistant, Event, CALLBACK_TYPE
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
+from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.loader import async_get_integration
+import uuid
+from datetime import timezone
 
 from .const import (
     CONF_ENDPOINT_URL,
@@ -59,6 +64,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     
 
     session = async_get_clientsession(hass)
+    integration = await async_get_integration(hass, DOMAIN)
+    plugin_version: str = integration.version or "0.0.0"
 
     def _json_default(obj: Any) -> str:
         iso = getattr(obj, "isoformat", None)
@@ -120,26 +127,90 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if not forward_all_notifications and not is_user_code_event(event):
             return
 
+        # Normalize origin and time
         origin = getattr(event, "origin", None)
         if origin is not None:
-            # Convert enum-like origin to string
             origin = getattr(origin, "value", origin)
             origin = str(origin)
+        time_fired = getattr(event, "time_fired", None)
+        if time_fired is not None:
+            occurred_at = time_fired.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+        else:
+            occurred_at = None
+
+        # Map event label -> normalized event_type (snake_case of label)
+        data = event.data or {}
+        raw_label: str = (data.get("event_label") or "").strip()
+        def _to_snake(label: str) -> str:
+            label = label.lower()
+            label = re.sub(r"[^a-z0-9]+", "_", label)
+            label = re.sub(r"_+", "_", label).strip("_")
+            return label
+        normalized_type = _to_snake(raw_label) if raw_label else f"{event.event_type}"
+
+        # Access info
+        params = data.get("parameters") or {}
+        code_slot = (
+            params.get("codeId")
+            or params.get("userId")
+            or data.get("code_slot")
+            or data.get("code_slot_id")
+        )
+        lower_label = raw_label.lower()
+        method = "keypad" if "keypad" in lower_label else "unknown"
+        result = "failure" if any(x in lower_label for x in ("fail", "error", "invalid")) else "success"
+
+        # Device/entity enrichment
+        device_reg = dr.async_get(hass)
+        entity_reg = er.async_get(hass)
+        device_id = data.get("device_id")
+        entity_id: Optional[str] = None
+        device_name: Optional[str] = None
+        manufacturer: Optional[str] = None
+        model: Optional[str] = None
+
+        if device_id:
+            device = device_reg.async_get(device_id)
+            if device:
+                device_name = device.name_by_user or device.name
+                manufacturer = device.manufacturer
+                model = device.model
+                ents = er.async_entries_for_device(entity_reg, device_id, include_disabled_entities=False)
+                # Prefer lock domain
+                lock_entities = [e for e in ents if e.domain == "lock"]
+                chosen = (lock_entities[0] if lock_entities else (ents[0] if ents else None))
+                if chosen:
+                    entity_id = chosen.entity_id
 
         payload: Dict[str, Any] = {
-            "property_id": property_id,
-            "event_type": event.event_type,
-            "hass_event": {
+            "schema_version": "1.0",
+            "event_id": str(uuid.uuid4()),
+            "occurred_at": occurred_at,
+            "event_type": normalized_type,
+            "device": {
+                "device_id": device_id,
+                "entity_id": entity_id,
+                "name": device_name,
+                "manufacturer": manufacturer,
+                "model": model,
+            },
+            "access": {
+                "method": method,
+                "code_slot": code_slot,
+                "result": result,
+            },
+            "plugin": {
+                "version": plugin_version,
+                "instance_url": hass.config.external_url or hass.config.internal_url,
+            },
+            "ha": {
+                "event_type": event.event_type,
+                "event_label": data.get("event_label"),
+                "node_id": data.get("node_id"),
+                "command_class_name": data.get("command_class_name") or data.get("command_class"),
                 "origin": origin,
-                "time_fired": getattr(event, "time_fired", None).isoformat()
-                if getattr(event, "time_fired", None)
-                else None,
-                "data": event.data,
             },
-            "context": {
-                "hass_instance": hass.config.external_url or hass.config.internal_url,
-                "component": DOMAIN,
-            },
+            "property_id": property_id,
         }
 
         await send_webhook(payload)
