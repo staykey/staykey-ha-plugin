@@ -96,35 +96,28 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         except (asyncio.TimeoutError, ClientError) as err:
             LOGGER.warning("StayKey webhook error: %s", err)
 
-    def is_user_code_event(event: Event) -> bool:
-        et = event.event_type
+    def is_whitelisted_event(event: Event) -> bool:
+        # Whitelist only specific Z-Wave JS Notification events for door locks.
+        # command_class 113 = Notification Command Class
+        # type 6 = Access Control (lock/door related)
+        # event ids under type 6 used here:
+        #   1 = Manual lock operation
+        #   2 = Manual unlock operation
+        #   6 = Keypad unlock operation
+        if event.event_type != ZWAVE_NOTIFICATION_EVENT:
+            return False
         data = event.data or {}
-
-        # zwave_js_notification: prefer events with userId parameter or keypad labels
-        if et == ZWAVE_NOTIFICATION_EVENT:
-            params = data.get("parameters") or {}
-            event_label = data.get("event_label", "").lower()
-            if "userid" in params or "userId" in params:
-                return True
-            # Common keypad-related labels
-            keypad_keywords = [
-                "keypad",
-                "code",
-                "user code",
-                "unlock",
-            ]
-            return any(word in event_label for word in keypad_keywords)
-
-        # zwave_js_value_notification and value_updated: check for userCode-like properties
-        if et in (ZWAVE_VALUE_NOTIFICATION_EVENT, ZWAVE_VALUE_UPDATED_EVENT):
-            property_name = (data.get("property_name") or "").lower()
-            if property_name in {"usercode", "user code", "code", "credential"}:
-                return True
-
-        return False
+        # Enforce: Notification CC (113), Access Control type (6), events {1,2,6}
+        if data.get("command_class") != 113:
+            return False
+        if data.get("type") != 6:
+            return False
+        if data.get("event") not in (1, 2, 6):
+            return False
+        return True
 
     async def handle_event(event: Event) -> None:
-        if not forward_all_notifications and not is_user_code_event(event):
+        if not forward_all_notifications and not is_whitelisted_event(event):
             return
 
         # Normalize origin and time
@@ -157,7 +150,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             or data.get("code_slot_id")
         )
         lower_label = raw_label.lower()
-        method = "keypad" if "keypad" in lower_label else "unknown"
+        # Determine access method from event id when available
+        #   1/2 are physical/manual lock/unlock; 6 is keypad unlock
+        evt_id = data.get("event")
+        if evt_id in (1, 2):
+            method = "manual"
+        elif evt_id == 6:
+            method = "keypad"
+        else:
+            method = "unknown"
         result = "failure" if any(x in lower_label for x in ("fail", "error", "invalid")) else "success"
 
         # Device/entity enrichment
