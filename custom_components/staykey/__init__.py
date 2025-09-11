@@ -17,7 +17,7 @@ from homeassistant.helpers.typing import ConfigType
 from .const import (
     CONF_ENDPOINT_URL,
     CONF_FORWARD_ALL_NOTIFICATIONS,
-    CONF_INTEGRATION_ID,
+    CONF_PROPERTY_ID,
     CONF_TIMEOUT,
     CONF_VERIFY_SSL,
     DEFAULT_ENDPOINT_URL,
@@ -44,10 +44,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     data = entry.data
     options = entry.options
 
-    integration_id: str = data.get(CONF_INTEGRATION_ID) or ""
+    property_id: str = data.get(CONF_PROPERTY_ID) or ""
     endpoint_url: str = data.get(CONF_ENDPOINT_URL) or DEFAULT_ENDPOINT_URL
 
-    if not integration_id or not endpoint_url:
+    if not property_id or not endpoint_url:
         LOGGER.error("StayKey missing required configuration; aborting setup")
         return False
 
@@ -75,7 +75,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         url = endpoint_url
         headers = {
             "Content-Type": "application/json",
-            HDR_STAYKEY_ID: integration_id,
+            HDR_STAYKEY_ID: property_id,
         }
 
         try:
@@ -127,7 +127,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             origin = str(origin)
 
         payload: Dict[str, Any] = {
-            "integration_id": integration_id,
+            "property_id": property_id,
             "event_type": event.event_type,
             "hass_event": {
                 "origin": origin,

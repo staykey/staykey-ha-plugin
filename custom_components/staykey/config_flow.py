@@ -12,7 +12,7 @@ from homeassistant.data_entry_flow import FlowResult
 from .const import (
     CONF_ENDPOINT_URL,
     CONF_FORWARD_ALL_NOTIFICATIONS,
-    CONF_INTEGRATION_ID,
+    CONF_PROPERTY_ID,
     CONF_TIMEOUT,
     CONF_VERIFY_SSL,
     DEFAULT_ENDPOINT_URL,
@@ -32,16 +32,16 @@ class StayKeyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: Dict[str, str] = {}
 
         if user_input is not None:
-            # Use integration_id as unique id to prevent duplicates per HA instance
-            await self.async_set_unique_id(user_input[CONF_INTEGRATION_ID])
+            # Use property_id as unique id to prevent duplicates per HA instance
+            await self.async_set_unique_id(user_input[CONF_PROPERTY_ID])
             self._abort_if_unique_id_configured()
             return self.async_create_entry(
-                title=f"StayKey {user_input[CONF_INTEGRATION_ID]}", data=user_input
+                title=f"StayKey {user_input[CONF_PROPERTY_ID]}", data=user_input
             )
 
         data_schema = vol.Schema(
             {
-                vol.Required(CONF_INTEGRATION_ID): str,
+                vol.Required(CONF_PROPERTY_ID): str,
                 vol.Optional(CONF_ENDPOINT_URL, default=DEFAULT_ENDPOINT_URL): str,
             }
         )

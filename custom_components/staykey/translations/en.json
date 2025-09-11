@@ -6,7 +6,7 @@
         "title": "Configure StayKey",
         "description": "Enter your StayKey credentials to link this Home Assistant instance.",
         "data": {
-          "integration_id": "Integration ID",
+          "property_id": "Property ID",
           "endpoint_url": "Events endpoint URL"
         }
       }
