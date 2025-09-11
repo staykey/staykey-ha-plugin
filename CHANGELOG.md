@@ -1,3 +1,10 @@
+## [1.0.1](https://github.com/staykey/staykey-ha-plugin/compare/v1.0.0...v1.0.1) (2025-09-11)
+
+
+### Bug Fixes
+
+* trigger release to test updates in homeassistant ([aea1b8e](https://github.com/staykey/staykey-ha-plugin/commit/aea1b8eb1a56aa50314bec0c4441bc6421f7a86f))
+
 ## 1.0.0 (2025-09-11)
 
 

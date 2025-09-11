@@ -1,7 +1,7 @@
 {
   "domain": "staykey",
   "name": "StayKey",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "documentation": "https://gitlab.com/staykey/backend/staykey-ha-plugin",
   "issue_tracker": "https://gitlab.com/staykey/backend/staykey-ha-plugin/-/issues",
   "requirements": [],
