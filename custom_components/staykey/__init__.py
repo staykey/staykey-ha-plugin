@@ -60,8 +60,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     session = async_get_clientsession(hass)
 
+    def _json_default(obj: Any) -> str:
+        iso = getattr(obj, "isoformat", None)
+        if callable(iso):
+            return iso()
+        value = getattr(obj, "value", None)
+        if value is not None and not callable(value):
+            return str(value)
+        return str(obj)
+
     async def send_webhook(payload: Dict[str, Any]) -> None:
-        body = json.dumps(payload, separators=(",", ":"))
+        body = json.dumps(payload, separators=(",", ":"), default=_json_default)
 
         url = endpoint_url
         headers = {
@@ -111,11 +120,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if not forward_all_notifications and not is_user_code_event(event):
             return
 
+        origin = getattr(event, "origin", None)
+        if origin is not None:
+            # Convert enum-like origin to string
+            origin = getattr(origin, "value", origin)
+            origin = str(origin)
+
         payload: Dict[str, Any] = {
             "integration_id": integration_id,
             "event_type": event.event_type,
             "hass_event": {
-                "origin": getattr(event, "origin", None),
+                "origin": origin,
                 "time_fired": getattr(event, "time_fired", None).isoformat()
                 if getattr(event, "time_fired", None)
                 else None,
