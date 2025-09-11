@@ -1,0 +1,33 @@
+{
+  "title": "StayKey",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configure StayKey",
+        "description": "Enter your StayKey credentials to link this Home Assistant instance.",
+        "data": {
+          "integration_id": "Integration ID",
+          "backend_url": "Backend base URL",
+          "signing_secret": "Signing secret"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "This integration is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "StayKey Options",
+        "data": {
+          "forward_all_notifications": "Forward all Z-Wave notifications (not only user code)",
+          "verify_ssl": "Verify TLS certificates",
+          "timeout": "Webhook timeout (seconds)",
+          "endpoint_path": "Webhook endpoint path"
+        }
+      }
+    }
+  }
+}
+
