@@ -6,24 +6,22 @@ DOMAIN: str = "staykey"
 
 # Config entry keys
 CONF_INTEGRATION_ID: str = "integration_id"
-CONF_BACKEND_URL: str = "backend_url"
-CONF_SIGNING_SECRET: str = "signing_secret"
+CONF_ENDPOINT_URL: str = "endpoint_url"
 
 # Options
 CONF_FORWARD_ALL_NOTIFICATIONS: str = "forward_all_notifications"
 CONF_VERIFY_SSL: str = "verify_ssl"
 CONF_TIMEOUT: str = "timeout"
-CONF_ENDPOINT_PATH: str = "endpoint_path"
+DEFAULT_ENDPOINT_URL: str = "https://api.staykey.example/ha/webhooks/events"
 
 DEFAULT_TIMEOUT_SECONDS: int = 10
 DEFAULT_VERIFY_SSL: bool = True
 DEFAULT_FORWARD_ALL_NOTIFICATIONS: bool = False
-DEFAULT_ENDPOINT_PATH: str = "/ha/webhooks/events"
+ 
 
 # Headers
 HDR_STAYKEY_ID: str = "X-StayKey-Id"
-HDR_STAYKEY_SIGNATURE: str = "X-StayKey-Signature"
-HDR_STAYKEY_TIMESTAMP: str = "X-StayKey-Timestamp"
+ 
 
 # Event types we care about primarily
 ZWAVE_NOTIFICATION_EVENT: str = "zwave_js_notification"

@@ -10,14 +10,12 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 
 from .const import (
-    CONF_BACKEND_URL,
-    CONF_ENDPOINT_PATH,
+    CONF_ENDPOINT_URL,
     CONF_FORWARD_ALL_NOTIFICATIONS,
     CONF_INTEGRATION_ID,
-    CONF_SIGNING_SECRET,
     CONF_TIMEOUT,
     CONF_VERIFY_SSL,
-    DEFAULT_ENDPOINT_PATH,
+    DEFAULT_ENDPOINT_URL,
     DEFAULT_FORWARD_ALL_NOTIFICATIONS,
     DEFAULT_TIMEOUT_SECONDS,
     DEFAULT_VERIFY_SSL,
@@ -44,8 +42,7 @@ class StayKeyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         data_schema = vol.Schema(
             {
                 vol.Required(CONF_INTEGRATION_ID): str,
-                vol.Required(CONF_BACKEND_URL): str,
-                vol.Required(CONF_SIGNING_SECRET): str,
+                vol.Optional(CONF_ENDPOINT_URL, default=DEFAULT_ENDPOINT_URL): str,
             }
         )
         return self.async_show_form(step_id="user", data_schema=data_schema, errors=errors)
@@ -80,10 +77,7 @@ class StayKeyOptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(
                     CONF_TIMEOUT, default=options.get(CONF_TIMEOUT, DEFAULT_TIMEOUT_SECONDS)
                 ): int,
-                vol.Optional(
-                    CONF_ENDPOINT_PATH,
-                    default=options.get(CONF_ENDPOINT_PATH, DEFAULT_ENDPOINT_PATH),
-                ): str,
+                vol.Optional(CONF_ENDPOINT_URL, default=DEFAULT_ENDPOINT_URL): str,
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema, errors=errors)

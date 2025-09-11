@@ -3,11 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
-import hmac
 import json
 import logging
-import time
 from typing import Any, Callable, Dict, Optional
 
 from aiohttp import ClientError
@@ -18,21 +15,17 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
 
 from .const import (
-    CONF_BACKEND_URL,
-    CONF_ENDPOINT_PATH,
+    CONF_ENDPOINT_URL,
     CONF_FORWARD_ALL_NOTIFICATIONS,
     CONF_INTEGRATION_ID,
-    CONF_SIGNING_SECRET,
     CONF_TIMEOUT,
     CONF_VERIFY_SSL,
-    DEFAULT_ENDPOINT_PATH,
+    DEFAULT_ENDPOINT_URL,
     DEFAULT_FORWARD_ALL_NOTIFICATIONS,
     DEFAULT_TIMEOUT_SECONDS,
     DEFAULT_VERIFY_SSL,
     DOMAIN,
     HDR_STAYKEY_ID,
-    HDR_STAYKEY_SIGNATURE,
-    HDR_STAYKEY_TIMESTAMP,
     ZWAVE_NOTIFICATION_EVENT,
     ZWAVE_VALUE_NOTIFICATION_EVENT,
     ZWAVE_VALUE_UPDATED_EVENT,
@@ -52,10 +45,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     options = entry.options
 
     integration_id: str = data.get(CONF_INTEGRATION_ID) or ""
-    backend_url: str = data.get(CONF_BACKEND_URL) or ""
-    signing_secret: str = data.get(CONF_SIGNING_SECRET) or ""
+    endpoint_url: str = data.get(CONF_ENDPOINT_URL) or DEFAULT_ENDPOINT_URL
 
-    if not integration_id or not backend_url or not signing_secret:
+    if not integration_id or not endpoint_url:
         LOGGER.error("StayKey missing required configuration; aborting setup")
         return False
 
@@ -64,24 +56,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
     verify_ssl: bool = options.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL)
     timeout_seconds: int = options.get(CONF_TIMEOUT, DEFAULT_TIMEOUT_SECONDS)
-    endpoint_path: str = options.get(CONF_ENDPOINT_PATH, DEFAULT_ENDPOINT_PATH)
+    
 
     session = async_get_clientsession(hass)
 
-    async def send_signed_webhook(payload: Dict[str, Any]) -> None:
+    async def send_webhook(payload: Dict[str, Any]) -> None:
         body = json.dumps(payload, separators=(",", ":"))
-        timestamp = str(int(time.time()))
-        signature_payload = f"{timestamp}.{body}".encode()
-        signature = hmac.new(
-            signing_secret.encode(), signature_payload, hashlib.sha256
-        ).hexdigest()
 
-        url = backend_url.rstrip("/") + endpoint_path
+        url = endpoint_url
         headers = {
             "Content-Type": "application/json",
             HDR_STAYKEY_ID: integration_id,
-            HDR_STAYKEY_TIMESTAMP: timestamp,
-            HDR_STAYKEY_SIGNATURE: f"sha256={signature}",
         }
 
         try:
@@ -142,7 +127,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             },
         }
 
-        await send_signed_webhook(payload)
+        await send_webhook(payload)
 
     # Subscribe to Z-Wave JS events
     unsubscribers: list[CALLBACK_TYPE] = []

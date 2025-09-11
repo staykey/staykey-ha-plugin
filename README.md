@@ -20,14 +20,13 @@ Recommended install via HACS:
 4. Restart Home Assistant.
 5. Go to Settings → Devices & Services → Add Integration → "StayKey" and enter:
    - Integration ID: Your StayKey integration identifier (issued by StayKey)
-   - Backend URL: Base URL for the StayKey webhook endpoint (e.g., `https://api.staykey.example`)
-   - Signing Secret: A secret used to sign webhook requests (keep this private)
+   - Events endpoint URL (optional): Defaults to production; override for development.
 
 Alternative (manual): copy `custom_components/staykey` into your HA `config/custom_components` directory and restart.
 
 ## Event Forwarding
 
-The integration subscribes to Z-Wave JS notifications. When a keypad/user code is used, a signed JSON payload is POSTed to the configured StayKey backend.
+The integration subscribes to Z-Wave JS notifications. When a keypad/user code is used, a JSON payload is POSTed to the configured StayKey events endpoint.
 
 Payload example:
 
@@ -47,13 +46,12 @@ Payload example:
 }
 ```
 
-Headers include `X-StayKey-Signature: sha256=...` where the HMAC is computed over `{timestamp}.{raw_body}` with your Signing Secret. Additional headers include `X-StayKey-Id` and `X-StayKey-Timestamp`.
+Headers include `X-StayKey-Id: <integration_id>`.
 
 ## Security
 
-- HMAC-SHA256 signing ensures payload integrity. Verify on the StayKey backend.
 - The Integration ID links the HA instance to a StayKey account. Treat it as an access identifier.
-- Keep the Signing Secret private; rotate it regularly.
+- For development without signing, ensure TLS and restrict endpoint visibility. Future versions may add signed requests.
 
 ## Development
 

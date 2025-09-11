@@ -7,8 +7,7 @@
         "description": "Enter your StayKey credentials to link this Home Assistant instance.",
         "data": {
           "integration_id": "Integration ID",
-          "backend_url": "Backend base URL",
-          "signing_secret": "Signing secret"
+          "endpoint_url": "Events endpoint URL"
         }
       }
     },
@@ -24,7 +23,7 @@
           "forward_all_notifications": "Forward all Z-Wave notifications (not only user code)",
           "verify_ssl": "Verify TLS certificates",
           "timeout": "Webhook timeout (seconds)",
-          "endpoint_path": "Webhook endpoint path"
+          "endpoint_url": "Events endpoint URL"
         }
       }
     }
