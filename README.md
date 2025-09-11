@@ -116,3 +116,4 @@ Option B (manual):
 2. Update `CHANGELOG.md`
 3. Create a Git tag matching the version (e.g., `v0.2.0`)
 4. Push the tag to the remote so HACS can detect the new release
+
