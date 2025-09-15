@@ -12,7 +12,13 @@
     "semantic-release": "^23.0.8"
   },
   "release": {
-    "branches": ["main"],
+    "branches": [
+      "main",
+      { "name": "rc/*", "prerelease": "rc" },
+      { "name": "rc-*", "prerelease": "rc" },
+      { "name": "beta/*", "prerelease": "beta" },
+      { "name": "beta-*", "prerelease": "beta" }
+    ],
     "plugins": [
       ["@semantic-release/commit-analyzer", {"preset": "conventionalcommits"}],
       ["@semantic-release/release-notes-generator", {"preset": "conventionalcommits"}],

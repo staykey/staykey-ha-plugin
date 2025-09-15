@@ -1,0 +1,51 @@
+# Commit messages (Conventional Commits)
+
+When generating git commit messages for this repository, always follow Conventional Commits to drive semantic-release versioning.
+
+Format:
+- <type>(<scope>): <subject>
+- Scope is optional; use a short path or area (e.g., staykey, ci, docs, readme)
+- Subject: imperative, concise, no trailing period
+
+Allowed types and intent:
+- feat: user‑visible feature
+- fix: bug fix
+- perf: performance improvement
+- refactor: code change that does not alter behavior
+- docs: documentation only
+- style: formatting, lint, non-functional styling
+- test: add or improve tests
+- build: build system or external dependencies changes
+- ci: CI configuration or scripts
+- chore: maintenance tasks (no src/app behavior change)
+- revert: revert a previous commit
+
+Breaking changes:
+- Add a footer starting with "BREAKING CHANGE:" describing the impact
+- Optionally append ! to the type, e.g., feat!: change api
+
+Issue references:
+- Use "Fixes: #123" when the change closes an issue
+- Use "Refs: #123" for related issues
+
+Release commits:
+- semantic-release will create release commits; do not hand‑craft version bumps
+- If needed manually, prefer: "chore(release): x.y.z"
+
+Bodies and footers:
+- If context is helpful, add a short body explaining the why over the what
+- Wrap at ~72 chars where reasonable
+
+Examples:
+- feat(staykey): add whitelist for Z-Wave manual/keypad operations
+- fix(webhook): handle EventOrigin serialization in payload
+- docs(readme): clarify HACS installation and supported events
+- ci(release): run semantic-release and update manifest.json
+- chore: add .cursorrules for Conventional Commits
+
+Defaults for this project:
+- For integration code changes under custom_components/staykey → scope "staykey"
+- For GitHub Actions → scope "ci"
+- For documentation → scope "readme" or "docs"
+
+If multiple logical changes exist, prefer separate commits per change.
