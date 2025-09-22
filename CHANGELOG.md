@@ -1,3 +1,16 @@
+## [1.1.0](https://github.com/staykey/staykey-ha-plugin/compare/v1.0.2...v1.1.0) (2025-09-22)
+
+
+### Features
+
+* **staykey:** use per-instance webhook URL and allow editing\n\n- Ask only for webhook URL in config (no default)\n- Remove property_id and StayKey header; read URL from options\n- Allow editing URL via options flow\n- Update strings/translations ([5c68b08](https://github.com/staykey/staykey-ha-plugin/commit/5c68b08dc23ecea576647902302d34eb495bb3d4))
+
+
+### Bug Fixes
+
+* **readme:** correct JSON structure in payload example ([16e4f95](https://github.com/staykey/staykey-ha-plugin/commit/16e4f95d928b95590a153bf131459036140ca703))
+* **staykey:** update webhook URL description for clarity ([eee1ef5](https://github.com/staykey/staykey-ha-plugin/commit/eee1ef5320df725ed7fdb61879430b7e815f6cfe))
+
 ## [1.0.2](https://github.com/staykey/staykey-ha-plugin/compare/v1.0.1...v1.0.2) (2025-09-11)
 
 
