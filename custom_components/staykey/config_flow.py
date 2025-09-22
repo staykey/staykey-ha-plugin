@@ -12,10 +12,8 @@ from homeassistant.data_entry_flow import FlowResult
 from .const import (
     CONF_ENDPOINT_URL,
     CONF_FORWARD_ALL_NOTIFICATIONS,
-    CONF_PROPERTY_ID,
     CONF_TIMEOUT,
     CONF_VERIFY_SSL,
-    DEFAULT_ENDPOINT_URL,
     DEFAULT_FORWARD_ALL_NOTIFICATIONS,
     DEFAULT_TIMEOUT_SECONDS,
     DEFAULT_VERIFY_SSL,
@@ -32,17 +30,16 @@ class StayKeyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: Dict[str, str] = {}
 
         if user_input is not None:
-            # Use property_id as unique id to prevent duplicates per HA instance
-            await self.async_set_unique_id(user_input[CONF_PROPERTY_ID])
+            # Use provided webhook URL as unique id to prevent duplicates
+            await self.async_set_unique_id(user_input[CONF_ENDPOINT_URL])
             self._abort_if_unique_id_configured()
             return self.async_create_entry(
-                title=f"StayKey {user_input[CONF_PROPERTY_ID]}", data=user_input
+                title="StayKey", data=user_input
             )
 
         data_schema = vol.Schema(
             {
-                vol.Required(CONF_PROPERTY_ID): str,
-                vol.Optional(CONF_ENDPOINT_URL, default=DEFAULT_ENDPOINT_URL): str,
+                vol.Required(CONF_ENDPOINT_URL): str,
             }
         )
         return self.async_show_form(step_id="user", data_schema=data_schema, errors=errors)
@@ -77,7 +74,13 @@ class StayKeyOptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(
                     CONF_TIMEOUT, default=options.get(CONF_TIMEOUT, DEFAULT_TIMEOUT_SECONDS)
                 ): int,
-                vol.Optional(CONF_ENDPOINT_URL, default=DEFAULT_ENDPOINT_URL): str,
+                vol.Optional(
+                    CONF_ENDPOINT_URL,
+                    default=options.get(
+                        CONF_ENDPOINT_URL,
+                        self.config_entry.data.get(CONF_ENDPOINT_URL, ""),
+                    ),
+                ): str,
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema, errors=errors)

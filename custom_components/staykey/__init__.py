@@ -22,15 +22,12 @@ from datetime import timezone
 from .const import (
     CONF_ENDPOINT_URL,
     CONF_FORWARD_ALL_NOTIFICATIONS,
-    CONF_PROPERTY_ID,
     CONF_TIMEOUT,
     CONF_VERIFY_SSL,
-    DEFAULT_ENDPOINT_URL,
     DEFAULT_FORWARD_ALL_NOTIFICATIONS,
     DEFAULT_TIMEOUT_SECONDS,
     DEFAULT_VERIFY_SSL,
     DOMAIN,
-    HDR_STAYKEY_ID,
     ZWAVE_NOTIFICATION_EVENT,
     ZWAVE_VALUE_NOTIFICATION_EVENT,
     ZWAVE_VALUE_UPDATED_EVENT,
@@ -49,11 +46,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     data = entry.data
     options = entry.options
 
-    property_id: str = data.get(CONF_PROPERTY_ID) or ""
-    endpoint_url: str = data.get(CONF_ENDPOINT_URL) or DEFAULT_ENDPOINT_URL
+    # Prefer URL from options to allow editing after setup; fall back to initial data
+    endpoint_url: str = options.get(CONF_ENDPOINT_URL) or data.get(CONF_ENDPOINT_URL) or ""
 
-    if not property_id or not endpoint_url:
-        LOGGER.error("StayKey missing required configuration; aborting setup")
+    if not endpoint_url:
+        LOGGER.error("StayKey missing required webhook URL; aborting setup")
         return False
 
     forward_all_notifications: bool = options.get(
@@ -82,7 +79,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         url = endpoint_url
         headers = {
             "Content-Type": "application/json",
-            HDR_STAYKEY_ID: property_id,
         }
 
         try:
@@ -211,7 +207,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 "command_class_name": data.get("command_class_name") or data.get("command_class"),
                 "origin": origin,
             },
-            "property_id": property_id,
         }
 
         await send_webhook(payload)

@@ -60,8 +60,7 @@ Payload example:
     "event_label": "Keypad unlock operation",
     "node_id": 12,
     "command_class_name": "Notification"
-  },
-  "property_id": "abc123"
+  }
 }
 ```
 

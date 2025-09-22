@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - main
+      - rc/**
+      - rc-*
+      - beta/**
+      - beta-*
   workflow_dispatch:
 
 permissions:
