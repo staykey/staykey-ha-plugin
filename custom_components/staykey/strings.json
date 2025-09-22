@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "Configure StayKey",
-        "description": "Paste the StayKey-provided webhook URL for this Home Assistant instance.",
+        "description": "Enter the StayKey provided webhook URL for this Home Assistant instance.",
         "data": {
           "endpoint_url": "Webhook URL"
         }
