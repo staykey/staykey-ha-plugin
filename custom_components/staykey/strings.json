@@ -4,10 +4,9 @@
     "step": {
       "user": {
         "title": "Configure StayKey",
-        "description": "Enter your StayKey credentials to link this Home Assistant instance.",
+        "description": "Paste the StayKey-provided webhook URL for this Home Assistant instance.",
         "data": {
-          "property_id": "Property ID",
-          "endpoint_url": "Events endpoint URL"
+          "endpoint_url": "Webhook URL"
         }
       }
     },
@@ -23,7 +22,7 @@
           "forward_all_notifications": "Forward all Z-Wave notifications (not only user code)",
           "verify_ssl": "Verify TLS certificates",
           "timeout": "Webhook timeout (seconds)",
-          "endpoint_url": "Events endpoint URL"
+          "endpoint_url": "Webhook URL"
         }
       }
     }
