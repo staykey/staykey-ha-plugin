@@ -1,20 +1,19 @@
 # StayKey for Home Assistant
 
-An easy way for StayKey customers to send lock activity from Home Assistant to StayKey. The integration listens for supported Z‑Wave lock events and securely forwards them to your StayKey account using your Property ID.
+An easy way for StayKey customers to send lock activity from Home Assistant to StayKey. The integration listens for supported Z‑Wave lock events and securely forwards them to your StayKey account using a unique per‑instance webhook URL.
 
 ## Features
 
-- Listens for Z-Wave user code events (e.g., keypad code used) and forwards them to the StayKey webhook endpoint
-- Config flow UI to enter your StayKey Property ID
-- Options flow to tweak behavior without re-adding the integration
-- Future: optional secure tunnel to avoid exposing Home Assistant publicly
+- Listens for Z-Wave user code events (e.g., keypad code used) and forwards them to StayKey via a per‑instance webhook
+- Config flow UI to enter your StayKey Webhook URL
+- Options flow to update the Webhook URL after setup
 
 ## Requirements
 
 - Home Assistant (2024.6 or newer)
 - HACS installed
 - Z-Wave JS integration for your lock(s)
-- Your StayKey Property ID (found in the StayKey dashboard)
+- Your StayKey Webhook URL (provided by StayKey for this HA instance)
 
 ## Installation (HACS)
 
@@ -25,7 +24,7 @@ Recommended install via HACS:
 3. In HACS, search for "StayKey" and click Install.
 4. Restart Home Assistant.
 5. Go to Settings → Devices & Services → Add Integration → "StayKey" and enter:
-   - Events endpoint URL: the StayKey events webhook URL provided by StayKey support
+   - Webhook URL: the StayKey‑provided webhook URL for this Home Assistant instance
 
 Alternative (manual): copy `custom_components/staykey` into your HA `config/custom_components` directory and restart.
 
@@ -63,7 +62,7 @@ Payload example:
 }
 ```
 
-Headers include `X-StayKey-Property-Id: <property_id>`.
+ 
 
 ## Which events are sent?
 
@@ -75,22 +74,19 @@ Only specific Z‑Wave JS Notification events from the Access Control category a
 
 ## Security & privacy
 
-- Your Property ID links your Home Assistant to the correct StayKey property.
+- Your unique Webhook URL links this Home Assistant instance to the correct StayKey property.
 - Payloads contain only lock event details and basic device metadata needed by StayKey.
 - If you need to test locally, you can use an HTTP endpoint on your LAN. In production, keep the default HTTPS endpoint.
 
 ## Configuration
 
-During initial setup you provide the StayKey events endpoint URL. After setup, you can adjust options from:
+During initial setup you provide the StayKey Webhook URL. After setup, you can adjust options from:
 
 Settings → Devices & Services → StayKey → Configure
 
 Available options:
 
-- Forward all notifications: if enabled, forwards all Z-Wave JS notifications captured. If disabled (default), only whitelisted Access Control events (manual lock, manual unlock, keypad unlock) are forwarded.
-- Verify SSL: whether to verify HTTPS certificates for the webhook request (default: enabled).
-- Timeout: request timeout in seconds for the webhook (default: 10).
-- Events endpoint URL: override or update the StayKey webhook URL after setup.
+- Webhook URL: override or update the StayKey webhook URL after setup.
 
 Tips:
 
