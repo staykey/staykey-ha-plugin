@@ -21,5 +21,3 @@ DEFAULT_FORWARD_ALL_NOTIFICATIONS: bool = False
 ZWAVE_NOTIFICATION_EVENT: str = "zwave_js_notification"
 ZWAVE_VALUE_NOTIFICATION_EVENT: str = "zwave_js_value_notification"
 ZWAVE_VALUE_UPDATED_EVENT: str = "zwave_js_value_updated"
-
-
