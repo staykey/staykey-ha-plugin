@@ -41,6 +41,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     return True
 
 
+async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Handle options updates by reloading the config entry."""
+    await hass.config_entries.async_reload(entry.entry_id)
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up StayKey from a config entry."""
     data = entry.data
@@ -224,6 +229,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "unsub": unsubscribers,
     }
 
+    # Reload the entry when options are updated so changes take effect
+    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
+
     LOGGER.info("StayKey set up. Forwarding %s notifications.",
                 "all" if forward_all_notifications else "user-code")
     return True
@@ -239,5 +247,13 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             except Exception:  # pragma: no cover
                 LOGGER.debug("Error unsubscribing StayKey handler", exc_info=True)
     return True
+
+
+# Expose the options flow at the integration root so HA shows "Configure"
+from .config_flow import StayKeyOptionsFlowHandler  # noqa: E402
+
+
+async def async_get_options_flow(entry: ConfigEntry) -> StayKeyOptionsFlowHandler:  # noqa: D401
+    return StayKeyOptionsFlowHandler(entry)
 
 
