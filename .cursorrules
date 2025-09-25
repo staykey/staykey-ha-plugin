@@ -49,3 +49,27 @@ Defaults for this project:
 - For documentation → scope "readme" or "docs"
 
 If multiple logical changes exist, prefer separate commits per change.
+
+# Cursor workflow and commit policy
+
+- Do not run git commit automatically. Prefer using Cursor's "Generate Commit Message" button.
+- Do not run git add/commit/push unless the user explicitly requests it.
+- When proposing commit messages, follow Conventional Commits and provide:
+  - A single-line subject: <type>(<scope>): <subject>
+  - A body with real newlines (no literal "\n"), using bullet points when helpful
+  - Optional footers (e.g., Fixes: #123, BREAKING CHANGE: ...)
+- Multi-line bodies must use actual newlines. Never include the characters "\n" in the message text.
+- If showing CLI examples, prefer multiple -m flags over embedding "\n":
+  git commit -m "feat(staykey): short imperative subject" \
+    -m "- Detail 1\n- Detail 2"
+- Keep subject lines concise, imperative, and without a trailing period. Wrap body at ~72 chars.
+
+Examples:
+
+feat(staykey): use per-instance webhook URL and allow editing
+
+- Ask only for webhook URL in config (no default)
+- Read URL from options and allow editing via options flow
+- Remove deprecated property_id usage and header
+
+docs(readme): update configuration and options to match current flow
