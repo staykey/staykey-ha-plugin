@@ -1,3 +1,10 @@
+## [1.2.0](https://github.com/staykey/staykey-ha-plugin/compare/v1.1.0...v1.2.0) (2025-09-25)
+
+
+### Features
+
+* **staykey:** add options update listener for config entry ([5c7440c](https://github.com/staykey/staykey-ha-plugin/commit/5c7440c082b9e7f50a1469ba745ccfb434178320))
+
 ## [1.1.0](https://github.com/staykey/staykey-ha-plugin/compare/v1.0.2...v1.1.0) (2025-09-22)
 
 
