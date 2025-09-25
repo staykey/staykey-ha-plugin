@@ -25,8 +25,7 @@ Recommended install via HACS:
 3. In HACS, search for "StayKey" and click Install.
 4. Restart Home Assistant.
 5. Go to Settings → Devices & Services → Add Integration → "StayKey" and enter:
-   - Property ID: your StayKey Property ID
-   - Events endpoint URL (optional): leave as default unless StayKey support asks you to change it
+   - Events endpoint URL: the StayKey events webhook URL provided by StayKey support
 
 Alternative (manual): copy `custom_components/staykey` into your HA `config/custom_components` directory and restart.
 
@@ -80,11 +79,23 @@ Only specific Z‑Wave JS Notification events from the Access Control category a
 - Payloads contain only lock event details and basic device metadata needed by StayKey.
 - If you need to test locally, you can use an HTTP endpoint on your LAN. In production, keep the default HTTPS endpoint.
 
-## Configuration tips
+## Configuration
 
-- To change settings later: Settings → Devices & Services → StayKey → Configure
-- For local testing: set an HTTP endpoint (e.g., `http://192.168.x.x:8000/...`)
-- To see logs: Settings → System → Logs → search “StayKey”
+During initial setup you provide the StayKey events endpoint URL. After setup, you can adjust options from:
+
+Settings → Devices & Services → StayKey → Configure
+
+Available options:
+
+- Forward all notifications: if enabled, forwards all Z-Wave JS notifications captured. If disabled (default), only whitelisted Access Control events (manual lock, manual unlock, keypad unlock) are forwarded.
+- Verify SSL: whether to verify HTTPS certificates for the webhook request (default: enabled).
+- Timeout: request timeout in seconds for the webhook (default: 10).
+- Events endpoint URL: override or update the StayKey webhook URL after setup.
+
+Tips:
+
+- For local testing, you can use an HTTP endpoint on your LAN (e.g., `http://192.168.x.x:8000/...`).
+- To see logs: Settings → System → Logs → search “StayKey”.
 
 ## Development
 
