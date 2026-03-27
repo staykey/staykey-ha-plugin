@@ -20,14 +20,20 @@ async def handle_discover_devices(
     hass: HomeAssistant,
     params: Dict[str, Any],
 ) -> Dict[str, Any]:
-    """Discover devices on this HA instance with full metadata."""
+    """Return every supported entity as a flat list, enriched with device metadata.
+
+    Each row is one entity (not one physical device).  A ratgdo garage door
+    opener will produce separate cover, light, and lock rows so the user can
+    pick exactly which entities to manage.
+    """
     entity_reg = er.async_get(hass)
     device_reg = dr.async_get(hass)
 
     filter_domains = set(params.get("domains", [])) or SUPPORTED_DOMAINS
 
-    devices_out: List[Dict[str, Any]] = []
-    seen_device_ids: set[str] = set()
+    # Cache device lookups so we only hit the registry once per device_id.
+    device_cache: Dict[str, Any] = {}
+    entities_out: List[Dict[str, Any]] = []
 
     for entry in entity_reg.entities.values():
         if entry.domain not in filter_domains:
@@ -35,62 +41,43 @@ async def handle_discover_devices(
         if entry.disabled:
             continue
 
-        device_info: Dict[str, Any] = {
+        entity_info: Dict[str, Any] = {
             "external_id": entry.entity_id,
             "name": entry.name or entry.original_name or entry.entity_id,
             "type": entry.domain,
             "unique_id": entry.unique_id,
         }
 
-        if entry.device_id and entry.device_id not in seen_device_ids:
-            device = device_reg.async_get(entry.device_id)
+        if entry.device_id:
+            if entry.device_id not in device_cache:
+                device_cache[entry.device_id] = device_reg.async_get(entry.device_id)
+            device = device_cache[entry.device_id]
+
             if device:
-                seen_device_ids.add(entry.device_id)
-                device_info.update({
-                    "name": device.name_by_user or device.name or device_info["name"],
-                    "manufacturer": device.manufacturer,
-                    "model": device.model,
-                    "hw_version": device.hw_version,
-                    "sw_version": device.sw_version,
-                    "area_id": device.area_id,
-                    "device_identifiers": [
-                        list(ident) for ident in device.identifiers
-                    ] if device.identifiers else [],
-                })
-
-                platform = _infer_protocol(device)
-                if platform:
-                    device_info["protocol"] = platform
-
-                entities = er.async_entries_for_device(
-                    entity_reg, entry.device_id, include_disabled_entities=False
+                entity_info["name"] = (
+                    entry.name
+                    or entry.original_name
+                    or device.name_by_user
+                    or device.name
+                    or entry.entity_id
                 )
-                device_info["entities"] = [
-                    {
-                        "entity_id": e.entity_id,
-                        "domain": e.domain,
-                        "name": e.name or e.original_name or e.entity_id,
-                        "unique_id": e.unique_id,
-                    }
-                    for e in entities
-                    if e.domain in SUPPORTED_DOMAINS
-                ]
+                entity_info["manufacturer"] = device.manufacturer
+                entity_info["model"] = device.model
+                entity_info["area_id"] = device.area_id
 
-                state = hass.states.get(entry.entity_id)
-                if state and state.attributes:
-                    device_info["capabilities"] = _extract_capabilities(
-                        entry.domain, state.attributes
-                    )
-                    if "battery_level" in state.attributes:
-                        device_info.setdefault("metadata", {})["battery_level"] = (
-                            state.attributes["battery_level"]
-                        )
-        elif entry.device_id and entry.device_id in seen_device_ids:
-            continue
+                protocol = _infer_protocol(device)
+                if protocol:
+                    entity_info["protocol"] = protocol
 
-        devices_out.append(device_info)
+        state = hass.states.get(entry.entity_id)
+        if state and state.attributes:
+            entity_info["capabilities"] = _extract_capabilities(
+                entry.domain, state.attributes
+            )
 
-    return {"devices": devices_out}
+        entities_out.append(entity_info)
+
+    return {"devices": entities_out}
 
 
 def _infer_protocol(device: Any) -> str | None:
