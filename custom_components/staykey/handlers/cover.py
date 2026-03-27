@@ -11,8 +11,11 @@ from typing import Any, Dict
 from homeassistant.core import HomeAssistant
 
 from ..device_map import DeviceMap
+from .utils import wait_for_state
 
 LOGGER = logging.getLogger(__name__)
+
+_COVER_STATE_TIMEOUT = 30  # seconds — matches Orion backend
 
 
 async def handle_open_cover(
@@ -29,11 +32,11 @@ async def handle_open_cover(
         "cover", "open_cover", {"entity_id": entity_id}, blocking=True
     )
 
-    state = hass.states.get(entity_id)
+    status = await wait_for_state(hass, entity_id, "open", _COVER_STATE_TIMEOUT)
     return {
         "entity_id": entity_id,
         "action": "open_cover",
-        "state": state.state if state else "unknown",
+        "state": status,
     }
 
 
@@ -51,11 +54,11 @@ async def handle_close_cover(
         "cover", "close_cover", {"entity_id": entity_id}, blocking=True
     )
 
-    state = hass.states.get(entity_id)
+    status = await wait_for_state(hass, entity_id, "closed", _COVER_STATE_TIMEOUT)
     return {
         "entity_id": entity_id,
         "action": "close_cover",
-        "state": state.state if state else "unknown",
+        "state": status,
     }
 
 

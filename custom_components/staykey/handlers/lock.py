@@ -11,8 +11,11 @@ from typing import Any, Dict
 from homeassistant.core import HomeAssistant
 
 from ..device_map import DeviceMap
+from .utils import wait_for_state
 
 LOGGER = logging.getLogger(__name__)
+
+_LOCK_STATE_TIMEOUT = 15  # seconds — matches Orion backend
 
 
 async def handle_lock(
@@ -29,9 +32,9 @@ async def handle_lock(
         "lock", "lock", {"entity_id": entity_id}, blocking=True
     )
 
-    state = hass.states.get(entity_id)
+    status = await wait_for_state(hass, entity_id, "locked", _LOCK_STATE_TIMEOUT)
     return {
-        "state": state.state if state else "unknown",
+        "state": status,
         "method": "remote",
     }
 
@@ -54,9 +57,9 @@ async def handle_unlock(
         "lock", "unlock", service_data, blocking=True
     )
 
-    state = hass.states.get(entity_id)
+    status = await wait_for_state(hass, entity_id, "unlocked", _LOCK_STATE_TIMEOUT)
     return {
-        "state": state.state if state else "unknown",
+        "state": status,
         "method": "remote",
     }
 
