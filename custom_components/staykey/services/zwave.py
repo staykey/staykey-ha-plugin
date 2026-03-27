@@ -15,7 +15,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 
 try:
     from zwave_js_server.const import CommandClass
@@ -52,11 +52,33 @@ def _get_zwave_client(hass: HomeAssistant) -> Optional[Any]:
 
 
 def _get_zwave_node_for_entity(hass: HomeAssistant, entity_id: str) -> Optional[Any]:
-    """Look up the Z-Wave node associated with a HA entity."""
+    """Look up the Z-Wave node associated with a HA entity via the device registry."""
     try:
         entity_reg = er.async_get(hass)
-        entry = entity_reg.async_get(entity_id)
-        if not entry or not entry.device_id:
+        entity_entry = entity_reg.async_get(entity_id)
+        if not entity_entry or not entity_entry.device_id:
+            LOGGER.debug("No entity registry entry or device_id for %s", entity_id)
+            return None
+
+        dev_reg = dr.async_get(hass)
+        device = dev_reg.async_get(entity_entry.device_id)
+        if not device:
+            LOGGER.debug("No device registry entry for device_id %s", entity_entry.device_id)
+            return None
+
+        zwave_node_id = None
+        for domain, identifier in device.identifiers:
+            if domain == "zwave_js":
+                parts = identifier.split("-")
+                if len(parts) >= 2:
+                    try:
+                        zwave_node_id = int(parts[1])
+                    except ValueError:
+                        pass
+                break
+
+        if zwave_node_id is None:
+            LOGGER.debug("No zwave_js identifier found on device %s", device.name)
             return None
 
         entries = hass.config_entries.async_entries("zwave_js")
@@ -70,7 +92,6 @@ def _get_zwave_node_for_entity(hass: HomeAssistant, entity_id: str) -> Optional[
             client = getattr(runtime_data, "client", None)
             if client is None and isinstance(runtime_data, dict):
                 client = runtime_data.get("client")
-
             if client is None:
                 continue
 
@@ -83,19 +104,10 @@ def _get_zwave_node_for_entity(hass: HomeAssistant, entity_id: str) -> Optional[
                 continue
 
             nodes = getattr(controller, "nodes", {})
-            for node in nodes.values():
-                device_id = getattr(node, "device_id", None)
-                if device_id and str(device_id) == entry.device_id:
-                    return node
+            if zwave_node_id in nodes:
+                return nodes[zwave_node_id]
 
-                endpoints = getattr(node, "endpoints", {})
-                for endpoint in endpoints.values():
-                    values = getattr(endpoint, "values", {})
-                    for value in values.values():
-                        value_id = getattr(value, "value_id", None)
-                        if value_id and entry.unique_id and str(value_id) in entry.unique_id:
-                            return node
-
+        LOGGER.debug("Z-Wave node %d not found in any loaded driver", zwave_node_id)
     except Exception:
         LOGGER.debug("Could not find Z-Wave node for entity %s", entity_id, exc_info=True)
     return None
