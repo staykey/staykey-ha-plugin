@@ -36,7 +36,7 @@ def _get_zwave_client(hass: HomeAssistant) -> Optional[Any]:
     try:
         entries = hass.config_entries.async_entries("zwave_js")
         for entry in entries:
-            if entry.state.name == "loaded":
+            if entry.state.name.lower() == "loaded":
                 runtime_data = getattr(entry, "runtime_data", None)
                 if runtime_data is None:
                     continue
@@ -89,7 +89,7 @@ def _get_zwave_node_for_entity(hass: HomeAssistant, entity_id: str) -> Optional[
         entries = hass.config_entries.async_entries("zwave_js")
         for config_entry in entries:
             state_name = config_entry.state.name if hasattr(config_entry.state, "name") else str(config_entry.state)
-            if state_name != "loaded":
+            if state_name.lower() != "loaded":
                 LOGGER.info("Z-Wave lookup: skipping config entry (state=%s)", state_name)
                 continue
             runtime_data = getattr(config_entry, "runtime_data", None)
