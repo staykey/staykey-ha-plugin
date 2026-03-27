@@ -115,9 +115,18 @@ def _get_zwave_node_for_entity(hass: HomeAssistant, entity_id: str) -> Optional[
                 continue
 
             nodes = getattr(controller, "nodes", {})
-            LOGGER.info("Z-Wave lookup: looking for node %d in %d nodes", zwave_node_id, len(nodes))
+            node_keys = list(nodes.keys())[:10]
+            LOGGER.info(
+                "Z-Wave lookup: looking for node %d in %d nodes (keys=%s, key_types=%s)",
+                zwave_node_id, len(nodes), node_keys,
+                [type(k).__name__ for k in node_keys],
+            )
             if zwave_node_id in nodes:
                 return nodes[zwave_node_id]
+            for key in nodes:
+                if str(key) == str(zwave_node_id):
+                    LOGGER.info("Z-Wave lookup: found node via string match (key=%r)", key)
+                    return nodes[key]
 
         LOGGER.warning("Z-Wave lookup: node %d not found in any loaded driver", zwave_node_id)
     except Exception:
