@@ -1,3 +1,10 @@
+## [1.3.0-beta.5](https://github.com/staykey/staykey-ha-plugin/compare/v1.3.0-beta.4...v1.3.0-beta.5) (2026-03-27)
+
+
+### Features
+
+* **staykey:** enhance Z-Wave code slot handling ([c24d7d8](https://github.com/staykey/staykey-ha-plugin/commit/c24d7d8fed8913fa0aaae7fb62eea20bd1e55552))
+
 ## [1.3.0-beta.4](https://github.com/staykey/staykey-ha-plugin/compare/v1.3.0-beta.3...v1.3.0-beta.4) (2026-03-27)
 
 
