@@ -1,3 +1,10 @@
+## [1.3.0-beta.4](https://github.com/staykey/staykey-ha-plugin/compare/v1.3.0-beta.3...v1.3.0-beta.4) (2026-03-27)
+
+
+### Features
+
+* **staykey:** enhance gateway connection handling ([f4b0b52](https://github.com/staykey/staykey-ha-plugin/commit/f4b0b524e129dcb7f202d60aa992df836dcbdf8d))
+
 ## [1.3.0-beta.3](https://github.com/staykey/staykey-ha-plugin/compare/v1.3.0-beta.2...v1.3.0-beta.3) (2026-03-27)
 
 
