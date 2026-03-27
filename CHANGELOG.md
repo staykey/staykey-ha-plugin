@@ -1,3 +1,10 @@
+## [1.3.0-beta.14](https://github.com/staykey/staykey-ha-plugin/compare/v1.3.0-beta.13...v1.3.0-beta.14) (2026-03-27)
+
+
+### Features
+
+* **staykey:** implement progress reporting for long-running actions ([d8bf257](https://github.com/staykey/staykey-ha-plugin/commit/d8bf25760eb92b735fe17c14967dc547bbe83b39))
+
 ## [1.3.0-beta.13](https://github.com/staykey/staykey-ha-plugin/compare/v1.3.0-beta.12...v1.3.0-beta.13) (2026-03-27)
 
 
