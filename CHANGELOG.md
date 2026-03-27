@@ -1,3 +1,10 @@
+## [1.3.0-beta.6](https://github.com/staykey/staykey-ha-plugin/compare/v1.3.0-beta.5...v1.3.0-beta.6) (2026-03-27)
+
+
+### Features
+
+* **staykey:** enhance Z-Wave entity lookup using device registry ([82e3c65](https://github.com/staykey/staykey-ha-plugin/commit/82e3c655f6322bb41f8342a61b06485bc164790f))
+
 ## [1.3.0-beta.5](https://github.com/staykey/staykey-ha-plugin/compare/v1.3.0-beta.4...v1.3.0-beta.5) (2026-03-27)
 
 
