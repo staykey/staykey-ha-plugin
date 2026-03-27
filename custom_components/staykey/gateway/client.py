@@ -7,6 +7,7 @@ import logging
 from typing import Any, Callable, Coroutine, Dict, Optional
 
 import aiohttp
+from homeassistant.const import __version__ as HA_VERSION
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
@@ -171,7 +172,7 @@ class GatewayClient:
             response.get("gateway_version"),
         )
 
-        ha_version = self._hass.config.version or "unknown"
+        ha_version = HA_VERSION
         features = [
             "lock_control",
             "access_code_management",

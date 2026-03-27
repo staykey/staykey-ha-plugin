@@ -17,7 +17,7 @@ CONF_TIMEOUT: str = "timeout"
 DEFAULT_TIMEOUT_SECONDS: int = 10
 DEFAULT_VERIFY_SSL: bool = True
 DEFAULT_FORWARD_ALL_NOTIFICATIONS: bool = False
-DEFAULT_GATEWAY_URL: str = "wss://app.staykey.co/orion/gateway/ws"
+DEFAULT_GATEWAY_URL: str = "wss://api.staykey.co/orion/gateway/websocket"
 
 # Event types we care about primarily
 ZWAVE_NOTIFICATION_EVENT: str = "zwave_js_notification"
