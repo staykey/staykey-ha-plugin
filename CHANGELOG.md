@@ -1,3 +1,10 @@
+## [1.3.0-beta.7](https://github.com/staykey/staykey-ha-plugin/compare/v1.3.0-beta.6...v1.3.0-beta.7) (2026-03-27)
+
+
+### Bug Fixes
+
+* **staykey:** resolve Z-Wave node lookup and add runtime_data fallback ([8b9f292](https://github.com/staykey/staykey-ha-plugin/commit/8b9f2920020741d7e2c59f988c6abbb169538408))
+
 ## [1.3.0-beta.6](https://github.com/staykey/staykey-ha-plugin/compare/v1.3.0-beta.5...v1.3.0-beta.6) (2026-03-27)
 
 
