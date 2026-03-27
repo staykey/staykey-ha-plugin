@@ -76,17 +76,13 @@ async def handle_set_access_code(
     params: Dict[str, Any],
 ) -> Dict[str, Any]:
     """Set an access code on a lock. Uses zwave_js service for Z-Wave locks."""
-    device_id = params.get("device_id", "")
-    entity_id = device_map.get_entity_id(device_id)
-    if not entity_id:
-        raise ValueError(f"Unknown device_id: {device_id}")
+    entity_id = _resolve_entity_id(device_map, params)
 
-    slot = params.get("slot")
-    code = params.get("code")
-    name = params.get("name", "")
+    slot = params.get("slot") or params.get("code_slot")
+    code = params.get("code") or params.get("access_code")
 
     if not slot or not code:
-        raise ValueError("slot and code are required")
+        raise ValueError("slot/code_slot and code/access_code are required")
 
     await hass.services.async_call(
         "zwave_js",
@@ -112,14 +108,11 @@ async def handle_clear_access_code(
     params: Dict[str, Any],
 ) -> Dict[str, Any]:
     """Clear an access code from a lock."""
-    device_id = params.get("device_id", "")
-    entity_id = device_map.get_entity_id(device_id)
-    if not entity_id:
-        raise ValueError(f"Unknown device_id: {device_id}")
+    entity_id = _resolve_entity_id(device_map, params)
 
-    slot = params.get("slot")
+    slot = params.get("slot") or params.get("code_slot")
     if not slot:
-        raise ValueError("slot is required")
+        raise ValueError("slot/code_slot is required")
 
     await hass.services.async_call(
         "zwave_js",
@@ -132,3 +125,19 @@ async def handle_clear_access_code(
     )
 
     return {"slot": slot, "cleared": True}
+
+
+def _resolve_entity_id(device_map: DeviceMap, params: Dict[str, Any]) -> str:
+    """Resolve HA entity_id from either ``external_id`` or ``device_id``."""
+    external_id = params.get("external_id", "")
+    if external_id:
+        return external_id
+
+    device_id = params.get("device_id", "")
+    entity_id = device_map.get_entity_id(device_id)
+    if entity_id:
+        return entity_id
+
+    raise ValueError(
+        f"Cannot resolve entity: device_id={device_id!r}, external_id={external_id!r}"
+    )

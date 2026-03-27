@@ -31,6 +31,7 @@ _ACTION_MAP = {
     "lock": lock.handle_lock,
     "unlock": lock.handle_unlock,
     "clear_access_code": lock.handle_clear_access_code,
+    "clear_lock_access_code": lock.handle_clear_access_code,
     "get_state": state.handle_get_state,
     "get_capabilities": capability.handle_get_capabilities,
     "get_diagnostics": diagnostics.handle_get_diagnostics,
@@ -71,9 +72,9 @@ def create_command_handler(
                 return await handler(hass, device_map, params, progress_fn=progress_fn)
             return await handler(hass, device_map, params)
 
-        if action == "set_access_code":
+        if action in ("set_access_code", "set_lock_access_code"):
             return await _handle_set_access_code(hass, device_map, params)
-        if action == "get_access_codes":
+        if action in ("get_access_codes", "get_lock_access_codes"):
             return await _handle_get_access_codes(hass, device_map, params)
         if action == "discover_devices":
             return await device_discovery.handle_discover_devices(hass, params)
@@ -87,30 +88,52 @@ def create_command_handler(
     return handle_command
 
 
+def _resolve_entity_id(
+    device_map: DeviceMap,
+    params: Dict[str, Any],
+) -> str:
+    """Resolve HA entity_id from params.
+
+    Orion sends ``external_id`` (the HA entity_id) for worker-driven
+    actions, while dashboard actions send ``device_id`` (Staykey internal
+    UUID that needs a device_map lookup).  Accept both conventions.
+    """
+    external_id = params.get("external_id", "")
+    if external_id:
+        return external_id
+
+    device_id = params.get("device_id", "")
+    entity_id = device_map.get_entity_id(device_id)
+    if entity_id:
+        return entity_id
+
+    raise ValueError(
+        f"Cannot resolve entity: device_id={device_id!r}, external_id={external_id!r}"
+    )
+
+
 async def _handle_set_access_code(
     hass: HomeAssistant,
     device_map: DeviceMap,
     params: Dict[str, Any],
 ) -> Dict[str, Any]:
     """Set access code with optional verification via Z-Wave readback."""
-    device_id = params.get("device_id", "")
-    entity_id = device_map.get_entity_id(device_id)
-    if not entity_id:
-        raise ValueError(f"Unknown device_id: {device_id}")
+    entity_id = _resolve_entity_id(device_map, params)
 
-    slot = params.get("slot")
-    code = params.get("code")
-    verify = params.get("verify", True)
+    slot = params.get("slot") or params.get("code_slot")
+    code = params.get("code") or params.get("access_code")
+    verify = params.get("verify") if "verify" in params else params.get("validate", True)
 
     if not slot or not code:
-        raise ValueError("slot and code are required")
+        raise ValueError("slot/code_slot and code/access_code are required")
 
     if verify:
         return await zwave.set_and_verify_code(
             hass, entity_id, slot=slot, code=str(code)
         )
-    else:
-        return await lock.handle_set_access_code(hass, device_map, params)
+
+    normalized = {**params, "device_id": params.get("device_id", ""), "slot": slot, "code": code}
+    return await lock.handle_set_access_code(hass, device_map, normalized)
 
 
 async def _handle_get_access_codes(
@@ -119,10 +142,7 @@ async def _handle_get_access_codes(
     params: Dict[str, Any],
 ) -> Dict[str, Any]:
     """Read code slot contents from a lock."""
-    device_id = params.get("device_id", "")
-    entity_id = device_map.get_entity_id(device_id)
-    if not entity_id:
-        raise ValueError(f"Unknown device_id: {device_id}")
+    entity_id = _resolve_entity_id(device_map, params)
 
     max_slots = params.get("max_slots", 30)
     slots = await zwave.read_code_slots(hass, entity_id, max_slots=max_slots)
