@@ -1,3 +1,10 @@
+## [1.3.0-beta.9](https://github.com/staykey/staykey-ha-plugin/compare/v1.3.0-beta.8...v1.3.0-beta.9) (2026-03-27)
+
+
+### Features
+
+* **staykey:** add list_entities action to handle entity listing for Orion endpoint ([7f21cb0](https://github.com/staykey/staykey-ha-plugin/commit/7f21cb065d67885b7c8d8d445554e28daaf28fee))
+
 ## [1.3.0-beta.8](https://github.com/staykey/staykey-ha-plugin/compare/v1.3.0-beta.7...v1.3.0-beta.8) (2026-03-27)
 
 
