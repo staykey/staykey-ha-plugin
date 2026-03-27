@@ -1,3 +1,10 @@
+## [1.3.0-beta.15](https://github.com/staykey/staykey-ha-plugin/compare/v1.3.0-beta.14...v1.3.0-beta.15) (2026-03-27)
+
+
+### Bug Fixes
+
+* **staykey:** wire up access code actions for gateway agent ([2457997](https://github.com/staykey/staykey-ha-plugin/commit/24579971e7a015384503c8fc3d50c40239c1c0a9))
+
 ## [1.3.0-beta.14](https://github.com/staykey/staykey-ha-plugin/compare/v1.3.0-beta.13...v1.3.0-beta.14) (2026-03-27)
 
 
