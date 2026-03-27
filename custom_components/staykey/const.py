@@ -6,6 +6,8 @@ DOMAIN: str = "staykey"
 
 # Config entry keys
 CONF_ENDPOINT_URL: str = "endpoint_url"
+CONF_GATEWAY_TOKEN: str = "gateway_token"
+CONF_GATEWAY_URL: str = "gateway_url"
 
 # Options
 CONF_FORWARD_ALL_NOTIFICATIONS: str = "forward_all_notifications"
@@ -15,7 +17,7 @@ CONF_TIMEOUT: str = "timeout"
 DEFAULT_TIMEOUT_SECONDS: int = 10
 DEFAULT_VERIFY_SSL: bool = True
 DEFAULT_FORWARD_ALL_NOTIFICATIONS: bool = False
- 
+DEFAULT_GATEWAY_URL: str = "wss://app.staykey.co/orion/gateway/ws"
 
 # Event types we care about primarily
 ZWAVE_NOTIFICATION_EVENT: str = "zwave_js_notification"
