@@ -478,6 +478,15 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
+async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
+    """Migrate config entries from older versions."""
+    if config_entry.version == 1:
+        LOGGER.info("Migrating StayKey config entry from version 1 to 2")
+        new_data = {**config_entry.data}
+        hass.config_entries.async_update_entry(config_entry, data=new_data, version=2)
+    return True
+
+
 from .config_flow import StayKeyOptionsFlowHandler  # noqa: E402
 
 
