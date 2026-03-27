@@ -1,3 +1,10 @@
+## [1.3.0-beta.11](https://github.com/staykey/staykey-ha-plugin/compare/v1.3.0-beta.10...v1.3.0-beta.11) (2026-03-27)
+
+
+### Bug Fixes
+
+* trigger release ([6a9a0bd](https://github.com/staykey/staykey-ha-plugin/commit/6a9a0bd2b59278ebcd1c1188f3b2690c2c23795e))
+
 ## [1.3.0-beta.10](https://github.com/staykey/staykey-ha-plugin/compare/v1.3.0-beta.9...v1.3.0-beta.10) (2026-03-27)
 
 
