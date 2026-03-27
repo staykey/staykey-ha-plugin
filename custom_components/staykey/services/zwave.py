@@ -57,14 +57,19 @@ def _get_zwave_node_for_entity(hass: HomeAssistant, entity_id: str) -> Optional[
         entity_reg = er.async_get(hass)
         entity_entry = entity_reg.async_get(entity_id)
         if not entity_entry or not entity_entry.device_id:
-            LOGGER.debug("No entity registry entry or device_id for %s", entity_id)
+            LOGGER.warning("Z-Wave lookup: no entity registry entry or device_id for %s", entity_id)
             return None
 
         dev_reg = dr.async_get(hass)
         device = dev_reg.async_get(entity_entry.device_id)
         if not device:
-            LOGGER.debug("No device registry entry for device_id %s", entity_entry.device_id)
+            LOGGER.warning("Z-Wave lookup: no device registry entry for device_id %s", entity_entry.device_id)
             return None
+
+        LOGGER.info(
+            "Z-Wave lookup: entity=%s device=%s identifiers=%s",
+            entity_id, device.name, device.identifiers,
+        )
 
         zwave_node_id = None
         for domain, identifier in device.identifiers:
@@ -74,42 +79,49 @@ def _get_zwave_node_for_entity(hass: HomeAssistant, entity_id: str) -> Optional[
                     try:
                         zwave_node_id = int(parts[1])
                     except ValueError:
-                        pass
+                        LOGGER.warning("Z-Wave lookup: could not parse node_id from %s", identifier)
                 break
 
         if zwave_node_id is None:
-            LOGGER.debug("No zwave_js identifier found on device %s", device.name)
+            LOGGER.warning("Z-Wave lookup: no zwave_js identifier on device %s (identifiers=%s)", device.name, device.identifiers)
             return None
 
         entries = hass.config_entries.async_entries("zwave_js")
         for config_entry in entries:
-            if config_entry.state.name != "loaded":
+            state_name = config_entry.state.name if hasattr(config_entry.state, "name") else str(config_entry.state)
+            if state_name != "loaded":
+                LOGGER.info("Z-Wave lookup: skipping config entry (state=%s)", state_name)
                 continue
             runtime_data = getattr(config_entry, "runtime_data", None)
             if runtime_data is None:
+                LOGGER.warning("Z-Wave lookup: no runtime_data on loaded config entry")
                 continue
 
             client = getattr(runtime_data, "client", None)
             if client is None and isinstance(runtime_data, dict):
                 client = runtime_data.get("client")
             if client is None:
+                LOGGER.warning("Z-Wave lookup: no client in runtime_data (type=%s)", type(runtime_data).__name__)
                 continue
 
             driver = getattr(client, "driver", None)
             if driver is None:
+                LOGGER.warning("Z-Wave lookup: no driver on client")
                 continue
 
             controller = getattr(driver, "controller", None)
             if controller is None:
+                LOGGER.warning("Z-Wave lookup: no controller on driver")
                 continue
 
             nodes = getattr(controller, "nodes", {})
+            LOGGER.info("Z-Wave lookup: looking for node %d in %d nodes", zwave_node_id, len(nodes))
             if zwave_node_id in nodes:
                 return nodes[zwave_node_id]
 
-        LOGGER.debug("Z-Wave node %d not found in any loaded driver", zwave_node_id)
+        LOGGER.warning("Z-Wave lookup: node %d not found in any loaded driver", zwave_node_id)
     except Exception:
-        LOGGER.debug("Could not find Z-Wave node for entity %s", entity_id, exc_info=True)
+        LOGGER.exception("Z-Wave lookup failed for entity %s", entity_id)
     return None
 
 
