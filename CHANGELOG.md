@@ -1,3 +1,10 @@
+## [1.3.0-beta.2](https://github.com/staykey/staykey-ha-plugin/compare/v1.3.0-beta.1...v1.3.0-beta.2) (2026-03-27)
+
+
+### Features
+
+* **staykey:** add migration support for config entries ([b070c5b](https://github.com/staykey/staykey-ha-plugin/commit/b070c5bb646c39ab65d3748079c5317d1e88b316))
+
 ## [1.3.0-beta.1](https://github.com/staykey/staykey-ha-plugin/compare/v1.2.0...v1.3.0-beta.1) (2026-03-27)
 
 
