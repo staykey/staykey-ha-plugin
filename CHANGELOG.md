@@ -1,3 +1,10 @@
+## [1.3.0-beta.12](https://github.com/staykey/staykey-ha-plugin/compare/v1.3.0-beta.11...v1.3.0-beta.12) (2026-03-27)
+
+
+### Features
+
+* **staykey:** add cover, switch, and climate action handlers ([d7e6b63](https://github.com/staykey/staykey-ha-plugin/commit/d7e6b637d073050330571b68e3580d08c48ddf37))
+
 ## [1.3.0-beta.11](https://github.com/staykey/staykey-ha-plugin/compare/v1.3.0-beta.10...v1.3.0-beta.11) (2026-03-27)
 
 
