@@ -1,3 +1,10 @@
+## [1.3.0-beta.13](https://github.com/staykey/staykey-ha-plugin/compare/v1.3.0-beta.12...v1.3.0-beta.13) (2026-03-27)
+
+
+### Bug Fixes
+
+* **staykey:** return complete climate state from action responses ([12c4a6e](https://github.com/staykey/staykey-ha-plugin/commit/12c4a6ef5bc1bf561ace75b86bd277795a00225f))
+
 ## [1.3.0-beta.12](https://github.com/staykey/staykey-ha-plugin/compare/v1.3.0-beta.11...v1.3.0-beta.12) (2026-03-27)
 
 
