@@ -115,3 +115,4 @@ def _extract_capabilities(domain: str, attributes: dict) -> list[str]:
     elif domain == "switch":
         caps.append("toggle")
     return caps
+
