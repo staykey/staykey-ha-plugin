@@ -1,3 +1,10 @@
+## [1.3.0-beta.8](https://github.com/staykey/staykey-ha-plugin/compare/v1.3.0-beta.7...v1.3.0-beta.8) (2026-03-27)
+
+
+### Bug Fixes
+
+* **staykey:** fix case-sensitive config entry state check blocking Z-Wave node lookup ([d0ae48e](https://github.com/staykey/staykey-ha-plugin/commit/d0ae48e158039752f5f0ec24ae82f21d290ca16b))
+
 ## [1.3.0-beta.7](https://github.com/staykey/staykey-ha-plugin/compare/v1.3.0-beta.6...v1.3.0-beta.7) (2026-03-27)
 
 
