@@ -1,3 +1,10 @@
+## [1.3.0-beta.1](https://github.com/staykey/staykey-ha-plugin/compare/v1.2.0...v1.3.0-beta.1) (2026-03-27)
+
+
+### Features
+
+* **staykey:** introduce gateway mode and update configuration options ([d4fb44f](https://github.com/staykey/staykey-ha-plugin/commit/d4fb44fa2ed4c7555b1955d54c47e86ade6eb6b3))
+
 ## [1.2.0](https://github.com/staykey/staykey-ha-plugin/compare/v1.1.0...v1.2.0) (2025-09-25)
 
 
