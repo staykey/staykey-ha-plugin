@@ -6,7 +6,7 @@ Routes incoming commands to the appropriate handler based on action name.
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Coroutine, Dict
+from typing import Any, Awaitable, Callable, Coroutine, Dict, Optional
 
 from homeassistant.core import HomeAssistant
 
@@ -22,6 +22,7 @@ from ..handlers import (
     state,
     switch,
 )
+from ..handlers.utils import ProgressFn
 from ..services import zwave
 
 LOGGER = logging.getLogger(__name__)
@@ -42,22 +43,32 @@ _ACTION_MAP = {
     "set_hvac_mode": climate.handle_set_hvac_mode,
 }
 
+_PROGRESS_ACTIONS = {"lock", "unlock", "open_cover", "close_cover"}
+
+CommandHandler = Callable[
+    [str, str, Dict[str, Any], Optional[ProgressFn]],
+    Coroutine[Any, Any, Dict[str, Any]],
+]
+
 
 def create_command_handler(
     hass: HomeAssistant,
     device_map: DeviceMap,
-) -> Callable[[str, str, Dict[str, Any]], Coroutine[Any, Any, Dict[str, Any]]]:
+) -> CommandHandler:
     """Create a command handler function that routes actions to handlers."""
 
     async def handle_command(
         action: str,
         request_id: str,
         params: Dict[str, Any],
+        progress_fn: Optional[ProgressFn] = None,
     ) -> Dict[str, Any]:
         LOGGER.debug("Handling command: action=%s id=%s", action, request_id)
 
         handler = _ACTION_MAP.get(action)
         if handler is not None:
+            if action in _PROGRESS_ACTIONS and progress_fn is not None:
+                return await handler(hass, device_map, params, progress_fn=progress_fn)
             return await handler(hass, device_map, params)
 
         if action == "set_access_code":

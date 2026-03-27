@@ -272,8 +272,13 @@ class GatewayClient:
         action = message.get("action", "")
         params = message.get("params", {})
 
+        async def progress_fn(current_state: str) -> None:
+            await self.send(protocol.progress_message(request_id, current_state))
+
         try:
-            result = await self._command_handler(action, request_id, params)
+            result = await self._command_handler(
+                action, request_id, params, progress_fn,
+            )
             await self.send(
                 protocol.response_message(request_id, status="ok", data=result)
             )

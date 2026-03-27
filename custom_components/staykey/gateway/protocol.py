@@ -107,5 +107,14 @@ def entity_id_changed_message(
     })
 
 
+def progress_message(request_id: str, current_state: str) -> str:
+    """Signal the gateway that a long-running request is still in progress."""
+    return encode({
+        "type": "progress",
+        "id": request_id,
+        "state": current_state,
+    })
+
+
 def pong_message() -> str:
     return encode({"type": "pong"})
