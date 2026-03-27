@@ -1,3 +1,10 @@
+## [1.3.0-beta.3](https://github.com/staykey/staykey-ha-plugin/compare/v1.3.0-beta.2...v1.3.0-beta.3) (2026-03-27)
+
+
+### Bug Fixes
+
+* **staykey:** update gateway URL and use Home Assistant version constant ([cb3c347](https://github.com/staykey/staykey-ha-plugin/commit/cb3c347c1f6b8917b0c84984a5179678d5d0cd1c))
+
 ## [1.3.0-beta.2](https://github.com/staykey/staykey-ha-plugin/compare/v1.3.0-beta.1...v1.3.0-beta.2) (2026-03-27)
 
 
