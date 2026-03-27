@@ -3,6 +3,9 @@
 Accesses Z-Wave JS server through HA's zwave_js config entry runtime data
 to perform operations not exposed by the REST API (code slot reading,
 node interview status, etc).
+
+Uses zwave-js-server-python's lock utilities for active node queries
+when the passive ValueDB cache is unpopulated.
 """
 
 from __future__ import annotations
@@ -13,6 +16,17 @@ from typing import Any, Dict, List, Optional
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
+
+try:
+    from zwave_js_server.const import CommandClass
+    from zwave_js_server.util.lock import (
+        get_code_slots,
+        get_usercode_from_node,
+        get_usercodes,
+    )
+    HAS_ZWAVE_LIB = True
+except ImportError:
+    HAS_ZWAVE_LIB = False
 
 LOGGER = logging.getLogger(__name__)
 
@@ -92,57 +106,64 @@ async def read_code_slots(
 ) -> List[Dict[str, Any]]:
     """Read lock code slot contents from the Z-Wave node.
 
-    Uses the Z-Wave JS UserCode command class to read actual slot data.
+    Uses zwave-js-server-python's get_usercodes which reads from the ValueDB cache.
     """
+    if not HAS_ZWAVE_LIB:
+        LOGGER.warning("zwave_js_server library not available for code slot reading")
+        return []
+
     node = _get_zwave_node_for_entity(hass, entity_id)
     if not node:
         LOGGER.warning("No Z-Wave node found for %s", entity_id)
         return []
 
-    slots: List[Dict[str, Any]] = []
-
     try:
-        endpoints = getattr(node, "endpoints", {})
-        for endpoint in endpoints.values():
-            values = getattr(endpoint, "values", {})
-            for value in values.values():
-                cc = getattr(value, "command_class", None)
-                cc_name = getattr(value, "command_class_name", "")
-
-                if cc == 99 or "User Code" in str(cc_name) or "UserCode" in str(cc_name):
-                    property_name = getattr(value, "property_name", "")
-                    property_key = getattr(value, "property_key", None)
-
-                    if property_name == "userCode" and property_key is not None:
-                        slot_num = property_key
-                        if isinstance(slot_num, int) and slot_num <= max_slots:
-                            raw_value = getattr(value, "value", None)
-                            status_value_id = f"{value.value_id}".replace(
-                                "userCode", "userIdStatus"
-                            )
-                            status = None
-                            for sv in values.values():
-                                if (
-                                    getattr(sv, "property_name", "") == "userIdStatus"
-                                    and getattr(sv, "property_key", None) == slot_num
-                                ):
-                                    status = getattr(sv, "value", None)
-                                    break
-
-                            occupied = status == 1 if status is not None else (raw_value is not None and raw_value != "")
-
-                            slot_info: Dict[str, Any] = {
-                                "slot": slot_num,
-                                "occupied": occupied,
-                            }
-                            if occupied and raw_value:
-                                slot_info["code"] = str(raw_value)
-                            slots.append(slot_info)
+        lib_slots = get_usercodes(node)
+        results: List[Dict[str, Any]] = []
+        for s in lib_slots:
+            slot_num = s["code_slot"]
+            if slot_num > max_slots:
+                continue
+            slot_info: Dict[str, Any] = {
+                "slot": slot_num,
+                "occupied": s.get("in_use") is True,
+            }
+            if s.get("in_use") and s.get("usercode"):
+                slot_info["code"] = str(s["usercode"])
+            results.append(slot_info)
+        return results
     except Exception:
         LOGGER.exception("Error reading code slots for %s", entity_id)
+        return []
 
-    slots.sort(key=lambda s: s["slot"])
-    return slots
+
+async def fetch_code_slot(
+    hass: HomeAssistant, entity_id: str, slot: int
+) -> Optional[Dict[str, Any]]:
+    """Actively query a single code slot from the lock over Z-Wave.
+
+    Unlike read_code_slots (which reads from cache), this sends a Z-Wave command
+    to the lock to fetch the current slot value, populating the ValueDB.
+    """
+    if not HAS_ZWAVE_LIB:
+        LOGGER.warning("zwave_js_server library not available for active code fetch")
+        return None
+
+    node = _get_zwave_node_for_entity(hass, entity_id)
+    if not node:
+        LOGGER.warning("No Z-Wave node found for %s", entity_id)
+        return None
+
+    try:
+        result = await get_usercode_from_node(node, slot)
+        return {
+            "slot": result["code_slot"],
+            "occupied": result.get("in_use") is True,
+            "code": str(result["usercode"]) if result.get("usercode") else None,
+        }
+    except Exception:
+        LOGGER.exception("Error fetching code slot %d for %s", slot, entity_id)
+        return None
 
 
 async def get_node_info(
@@ -223,11 +244,12 @@ async def set_and_verify_code(
     slot: int,
     code: str,
     max_retries: int = 2,
-    verify_delay_s: float = 3.0,
+    verify_delay_s: float = 2.0,
 ) -> Dict[str, Any]:
-    """Set a lock code and verify by reading back the slot.
+    """Set a lock code and verify by actively querying the slot from the lock.
 
-    Handles unreliable Z-Wave locks by performing set-then-verify as an atomic operation.
+    Uses node.async_invoke_cc_api to fetch the slot value directly from the lock
+    rather than relying on the passive ValueDB cache.
     """
     last_error = None
 
@@ -246,21 +268,18 @@ async def set_and_verify_code(
 
             await asyncio.sleep(verify_delay_s)
 
-            slots = await read_code_slots(hass, entity_id, max_slots=slot + 1)
-            for s in slots:
-                if s["slot"] == slot:
-                    if s.get("occupied") and s.get("code") == str(code):
-                        return {
-                            "slot": slot,
-                            "verified": True,
-                            "method": "zwave_set_and_verify",
-                            "attempts": attempt + 1,
-                        }
-                    else:
-                        last_error = f"Slot {slot} readback mismatch: expected {code}, got {s.get('code')}"
-                        break
+            result = await fetch_code_slot(hass, entity_id, slot)
+            if result and result.get("occupied") and result.get("code") == str(code):
+                return {
+                    "slot": slot,
+                    "verified": True,
+                    "method": "zwave_set_and_verify",
+                    "attempts": attempt + 1,
+                }
+            elif result:
+                last_error = f"Slot {slot} readback mismatch: expected {code}, got {result.get('code')}"
             else:
-                last_error = f"Slot {slot} not found in readback"
+                last_error = f"Slot {slot} could not be read from lock"
 
         except Exception as exc:
             last_error = str(exc)
