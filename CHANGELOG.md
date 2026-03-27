@@ -1,3 +1,10 @@
+## [1.3.0-beta.10](https://github.com/staykey/staykey-ha-plugin/compare/v1.3.0-beta.9...v1.3.0-beta.10) (2026-03-27)
+
+
+### Features
+
+* **staykey:** flat entity-based discovery for device selection ([34b4cba](https://github.com/staykey/staykey-ha-plugin/commit/34b4cba6ec21ab5a87d67b9417f094d28c71aa74))
+
 ## [1.3.0-beta.9](https://github.com/staykey/staykey-ha-plugin/compare/v1.3.0-beta.8...v1.3.0-beta.9) (2026-03-27)
 
 
