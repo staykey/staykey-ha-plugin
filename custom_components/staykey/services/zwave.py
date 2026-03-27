@@ -100,8 +100,14 @@ def _get_zwave_node_for_entity(hass: HomeAssistant, entity_id: str) -> Optional[
             client = getattr(runtime_data, "client", None)
             if client is None and isinstance(runtime_data, dict):
                 client = runtime_data.get("client")
+            if client is None and hasattr(runtime_data, "driver"):
+                client = runtime_data
             if client is None:
-                LOGGER.warning("Z-Wave lookup: no client in runtime_data (type=%s)", type(runtime_data).__name__)
+                LOGGER.warning(
+                    "Z-Wave lookup: no client in runtime_data (type=%s, attrs=%s)",
+                    type(runtime_data).__name__,
+                    [a for a in dir(runtime_data) if not a.startswith("_")][:15],
+                )
                 continue
 
             driver = getattr(client, "driver", None)
