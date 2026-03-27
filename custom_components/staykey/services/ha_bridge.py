@@ -44,6 +44,8 @@ def create_command_handler(
             return await state.handle_get_state(hass, device_map, params)
         elif action == "discover_devices":
             return await device_discovery.handle_discover_devices(hass, params)
+        elif action == "list_entities":
+            return await _handle_list_entities(hass, params)
         elif action == "get_capabilities":
             return await capability.handle_get_capabilities(hass, device_map, params)
         elif action == "get_diagnostics":
@@ -96,3 +98,29 @@ async def _handle_get_access_codes(
     max_slots = params.get("max_slots", 30)
     slots = await zwave.read_code_slots(hass, entity_id, max_slots=max_slots)
     return {"slots": slots}
+
+
+async def _handle_list_entities(
+    hass: HomeAssistant,
+    params: Dict[str, Any],
+) -> list:
+    """List entities in the format expected by the Orion list_ha_entities endpoint.
+
+    Calls discover_devices internally and reformats the response to match the
+    flat array format that Nimbus expects (entity_id, friendly_name, type, etc.).
+    """
+    result = await device_discovery.handle_discover_devices(hass, params)
+    devices = result.get("devices", [])
+
+    return [
+        {
+            "entity_id": d.get("external_id", ""),
+            "friendly_name": d.get("name", ""),
+            "type": d.get("type", ""),
+            "manufacturer": d.get("manufacturer"),
+            "model": d.get("model"),
+            "integration": d.get("protocol"),
+            "attributes": d.get("capabilities", []),
+        }
+        for d in devices
+    ]
