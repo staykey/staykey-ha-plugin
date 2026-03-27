@@ -11,10 +11,36 @@ from typing import Any, Callable, Coroutine, Dict
 from homeassistant.core import HomeAssistant
 
 from ..device_map import DeviceMap
-from ..handlers import batch, capability, device_discovery, diagnostics, lock, state
+from ..handlers import (
+    batch,
+    capability,
+    climate,
+    cover,
+    device_discovery,
+    diagnostics,
+    lock,
+    state,
+    switch,
+)
 from ..services import zwave
 
 LOGGER = logging.getLogger(__name__)
+
+_ACTION_MAP = {
+    "lock": lock.handle_lock,
+    "unlock": lock.handle_unlock,
+    "clear_access_code": lock.handle_clear_access_code,
+    "get_state": state.handle_get_state,
+    "get_capabilities": capability.handle_get_capabilities,
+    "get_diagnostics": diagnostics.handle_get_diagnostics,
+    "open_cover": cover.handle_open_cover,
+    "close_cover": cover.handle_close_cover,
+    "stop_cover": cover.handle_stop_cover,
+    "turn_on": switch.handle_turn_on,
+    "turn_off": switch.handle_turn_off,
+    "set_temperature": climate.handle_set_temperature,
+    "set_hvac_mode": climate.handle_set_hvac_mode,
+}
 
 
 def create_command_handler(
@@ -30,30 +56,22 @@ def create_command_handler(
     ) -> Dict[str, Any]:
         LOGGER.debug("Handling command: action=%s id=%s", action, request_id)
 
-        if action == "lock":
-            return await lock.handle_lock(hass, device_map, params)
-        elif action == "unlock":
-            return await lock.handle_unlock(hass, device_map, params)
-        elif action == "set_access_code":
+        handler = _ACTION_MAP.get(action)
+        if handler is not None:
+            return await handler(hass, device_map, params)
+
+        if action == "set_access_code":
             return await _handle_set_access_code(hass, device_map, params)
-        elif action == "clear_access_code":
-            return await lock.handle_clear_access_code(hass, device_map, params)
-        elif action == "get_access_codes":
+        if action == "get_access_codes":
             return await _handle_get_access_codes(hass, device_map, params)
-        elif action == "get_state":
-            return await state.handle_get_state(hass, device_map, params)
-        elif action == "discover_devices":
+        if action == "discover_devices":
             return await device_discovery.handle_discover_devices(hass, params)
-        elif action == "list_entities":
+        if action == "list_entities":
             return await _handle_list_entities(hass, params)
-        elif action == "get_capabilities":
-            return await capability.handle_get_capabilities(hass, device_map, params)
-        elif action == "get_diagnostics":
-            return await diagnostics.handle_get_diagnostics(hass, device_map, params)
-        elif action == "batch":
+        if action == "batch":
             return await batch.handle_batch(handle_command, params)
-        else:
-            raise ValueError(f"Unknown action: {action}")
+
+        raise ValueError(f"Unknown action: {action}")
 
     return handle_command
 
