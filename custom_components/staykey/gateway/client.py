@@ -10,6 +10,7 @@ import aiohttp
 from homeassistant.const import __version__ as HA_VERSION
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from ..device_map import DeviceMap
 from . import protocol
@@ -47,7 +48,6 @@ class GatewayClient:
         self._device_map = device_map
         self._command_handler = command_handler
         self._ws: Optional[aiohttp.ClientWebSocketResponse] = None
-        self._session: Optional[aiohttp.ClientSession] = None
         self._running = False
         self._reconnect_task: Optional[asyncio.Task] = None
         self._listen_task: Optional[asyncio.Task] = None
@@ -61,6 +61,21 @@ class GatewayClient:
         """Start the gateway connection loop."""
         self._running = True
         self._reconnect_task = asyncio.create_task(self._connection_loop())
+        self._reconnect_task.add_done_callback(self._on_loop_done)
+
+    def _on_loop_done(self, task: asyncio.Task) -> None:
+        """Restart the connection loop if it died unexpectedly."""
+        if not self._running:
+            return
+        if task.cancelled():
+            LOGGER.debug("Gateway connection loop was cancelled")
+            return
+        if exc := task.exception():
+            LOGGER.error("Gateway connection loop crashed: %s", exc, exc_info=exc)
+        else:
+            LOGGER.warning("Gateway connection loop exited unexpectedly, restarting")
+        self._reconnect_task = asyncio.create_task(self._connection_loop())
+        self._reconnect_task.add_done_callback(self._on_loop_done)
 
     async def stop(self) -> None:
         """Disconnect and stop reconnecting."""
@@ -70,12 +85,13 @@ class GatewayClient:
         if self._reconnect_task and not self._reconnect_task.done():
             self._reconnect_task.cancel()
         await self._close_ws()
-        if self._session and not self._session.closed:
-            await self._session.close()
 
     async def send(self, text: str) -> None:
         if self._ws and not self._ws.closed:
-            await self._ws.send_str(text)
+            try:
+                await self._ws.send_str(text)
+            except (ConnectionResetError, aiohttp.ClientError) as exc:
+                LOGGER.debug("Send failed (connection lost): %s", exc)
 
     async def send_or_queue(self, text: str) -> None:
         """Send immediately if connected, otherwise queue for later delivery."""
@@ -101,6 +117,7 @@ class GatewayClient:
         )
 
     async def _connection_loop(self) -> None:
+        LOGGER.info("Gateway connection loop started")
         backoff = INITIAL_BACKOFF_S
 
         while self._running:
@@ -111,12 +128,16 @@ class GatewayClient:
                     if self._event_queue.size > 0:
                         await self._event_queue.drain(self.send)
                     await self._listen()
+                    LOGGER.info("Gateway listen loop ended, will reconnect")
                 else:
-                    LOGGER.warning("Gateway authentication failed, retrying in %ds", backoff)
+                    LOGGER.warning("Gateway connection/auth failed, retrying in %ds", backoff)
             except asyncio.CancelledError:
-                break
+                LOGGER.info("Gateway connection loop cancelled")
+                raise
             except Exception:
                 LOGGER.exception("Gateway connection error")
+
+            await self._close_ws()
 
             if not self._running:
                 break
@@ -125,17 +146,19 @@ class GatewayClient:
             try:
                 await asyncio.sleep(backoff)
             except asyncio.CancelledError:
-                break
+                LOGGER.info("Gateway reconnect sleep cancelled")
+                raise
             backoff = min(backoff * 2, MAX_BACKOFF_S)
+
+        LOGGER.info("Gateway connection loop stopped (running=%s)", self._running)
 
     async def _connect_and_auth(self) -> bool:
         await self._close_ws()
 
-        if not self._session or self._session.closed:
-            self._session = aiohttp.ClientSession()
+        session = async_get_clientsession(self._hass)
 
         try:
-            self._ws = await self._session.ws_connect(
+            self._ws = await session.ws_connect(
                 self._gateway_url,
                 heartbeat=HEARTBEAT_S,
                 compress=9,
