@@ -1,4 +1,4 @@
-"""Constants for the StayKey integration."""
+"""Constants for the Staykey integration."""
 
 from __future__ import annotations
 

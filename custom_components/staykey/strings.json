@@ -1,9 +1,9 @@
 {
-  "title": "StayKey",
+  "title": "Staykey",
   "config": {
     "step": {
       "user": {
-        "title": "Configure StayKey",
+        "title": "Configure Staykey",
         "description": "Enter the gateway token from your Staykey dashboard to enable the gateway connection. Alternatively, provide a webhook URL for legacy mode.",
         "data": {
           "gateway_token": "Gateway Token",
@@ -22,7 +22,7 @@
   "options": {
     "step": {
       "init": {
-        "title": "StayKey Options",
+        "title": "Staykey Options",
         "data": {
           "gateway_token": "Gateway Token",
           "gateway_url": "Gateway URL",

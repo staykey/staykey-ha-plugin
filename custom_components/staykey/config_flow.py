@@ -1,4 +1,4 @@
-"""Config flow for StayKey integration."""
+"""Config flow for Staykey integration."""
 
 from __future__ import annotations
 
@@ -24,8 +24,8 @@ from .const import (
 )
 
 
-class StayKeyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for StayKey."""
+class StaykeyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    """Handle a config flow for Staykey."""
 
     VERSION = 2
 
@@ -42,7 +42,7 @@ class StayKeyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 unique_id = gateway_token or endpoint_url
                 await self.async_set_unique_id(unique_id)
                 self._abort_if_unique_id_configured()
-                return self.async_create_entry(title="StayKey", data=user_input)
+                return self.async_create_entry(title="Staykey", data=user_input)
 
         data_schema = vol.Schema(
             {
@@ -57,7 +57,7 @@ class StayKeyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return await self.async_step_user(user_input)
 
 
-class StayKeyOptionsFlowHandler(config_entries.OptionsFlow):
+class StaykeyOptionsFlowHandler(config_entries.OptionsFlow):
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         self.config_entry = config_entry
 
@@ -103,5 +103,5 @@ class StayKeyOptionsFlowHandler(config_entries.OptionsFlow):
         return self.async_show_form(step_id="init", data_schema=schema, errors=errors)
 
 
-async def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> StayKeyOptionsFlowHandler:
-    return StayKeyOptionsFlowHandler(config_entry)
+async def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> StaykeyOptionsFlowHandler:
+    return StaykeyOptionsFlowHandler(config_entry)

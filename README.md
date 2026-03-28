@@ -1,4 +1,4 @@
-# StayKey for Home Assistant
+# Staykey for Home Assistant
 
 A Home Assistant integration that connects your smart home devices to your Staykey account. Staykey can remotely manage locks, thermostats, covers, switches, and more — all through a secure, persistent connection from your Home Assistant instance.
 
@@ -22,9 +22,9 @@ A Home Assistant integration that connects your smart home devices to your Stayk
 
 1. In Home Assistant, open **HACS > Integrations > menu (three dots) > Custom repositories**
 2. Add this repository URL, select category **Integration**, and click **Add**
-3. Search for **StayKey** in HACS and click **Install**
+3. Search for **Staykey** in HACS and click **Install**
 4. Restart Home Assistant
-5. Go to **Settings > Devices & Services > Add Integration > StayKey**
+5. Go to **Settings > Devices & Services > Add Integration > Staykey**
 6. Enter your **Gateway Token** (provided by Staykey)
 
 **Manual install:** copy `custom_components/staykey` into your Home Assistant `config/custom_components` directory and restart.
@@ -33,7 +33,7 @@ A Home Assistant integration that connects your smart home devices to your Stayk
 
 During setup you provide your Staykey gateway token. After setup, you can adjust options from:
 
-**Settings > Devices & Services > StayKey > Configure**
+**Settings > Devices & Services > Staykey > Configure**
 
 Available options:
 

@@ -1,4 +1,4 @@
-"""StayKey Home Assistant integration."""
+"""Staykey Home Assistant integration."""
 
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Set up the StayKey integration (YAML not supported)."""
+    """Set up the Staykey integration (YAML not supported)."""
     return True
 
 
@@ -53,7 +53,7 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up StayKey from a config entry."""
+    """Set up Staykey from a config entry."""
     data = entry.data
     options = entry.options
 
@@ -68,7 +68,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     if not gateway_token and not endpoint_url:
-        LOGGER.error("StayKey missing both gateway token and webhook URL; aborting setup")
+        LOGGER.error("Staykey missing both gateway token and webhook URL; aborting setup")
         return False
 
     forward_all_notifications: bool = options.get(
@@ -98,7 +98,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
 
         await gateway_client.start()
-        LOGGER.info("StayKey gateway client started (url=%s)", gateway_url)
+        LOGGER.info("Staykey gateway client started (url=%s)", gateway_url)
 
         # State streaming: push state_changed events for tracked entities
         async def handle_state_changed(event: Event) -> None:
@@ -224,13 +224,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     if resp.status >= 400:
                         text = await resp.text()
                         LOGGER.warning(
-                            "StayKey webhook failed: %s %s - %s",
+                            "Staykey webhook failed: %s %s - %s",
                             resp.status,
                             resp.reason,
                             text,
                         )
             except (asyncio.TimeoutError, ClientError) as err:
-                LOGGER.warning("StayKey webhook error: %s", err)
+                LOGGER.warning("Staykey webhook error: %s", err)
 
         def is_whitelisted_event(event: Event) -> bool:
             if event.event_type != ZWAVE_NOTIFICATION_EVENT:
@@ -454,7 +454,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     mode = "gateway" if gateway_token else "webhook-only"
     LOGGER.info(
-        "StayKey set up in %s mode. Forwarding %s notifications.",
+        "Staykey set up in %s mode. Forwarding %s notifications.",
         mode,
         "all" if forward_all_notifications else "user-code",
     )
@@ -470,7 +470,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 try:
                     unsub()
                 except Exception:
-                    LOGGER.debug("Error unsubscribing StayKey handler", exc_info=True)
+                    LOGGER.debug("Error unsubscribing Staykey handler", exc_info=True)
 
         if gw := store.get("gateway_client"):
             await gw.stop()
@@ -481,14 +481,14 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     """Migrate config entries from older versions."""
     if config_entry.version == 1:
-        LOGGER.info("Migrating StayKey config entry from version 1 to 2")
+        LOGGER.info("Migrating Staykey config entry from version 1 to 2")
         new_data = {**config_entry.data}
         hass.config_entries.async_update_entry(config_entry, data=new_data, version=2)
     return True
 
 
-from .config_flow import StayKeyOptionsFlowHandler  # noqa: E402
+from .config_flow import StaykeyOptionsFlowHandler  # noqa: E402
 
 
-async def async_get_options_flow(entry: ConfigEntry) -> StayKeyOptionsFlowHandler:
-    return StayKeyOptionsFlowHandler(entry)
+async def async_get_options_flow(entry: ConfigEntry) -> StaykeyOptionsFlowHandler:
+    return StaykeyOptionsFlowHandler(entry)
