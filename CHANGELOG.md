@@ -1,3 +1,10 @@
+## [1.3.1](https://github.com/staykey/staykey-ha-plugin/compare/v1.3.0...v1.3.1) (2026-03-28)
+
+
+### Bug Fixes
+
+* standardize naming to "Staykey" across all files. ([1e84329](https://github.com/staykey/staykey-ha-plugin/commit/1e843299fd20880d0d39bdf77829b379e955ca59))
+
 ## [1.3.0](https://github.com/staykey/staykey-ha-plugin/compare/v1.2.0...v1.3.0) (2026-03-28)
 
 
