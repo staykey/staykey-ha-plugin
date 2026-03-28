@@ -1,6 +1,8 @@
 # Staykey for Home Assistant
 
-A Home Assistant integration that connects your smart home devices to your Staykey account. Staykey can remotely manage locks, thermostats, covers, switches, and more — all through a secure, persistent connection from your Home Assistant instance.
+A Home Assistant integration that connects your smart home devices to your [Staykey](https://getstaykey.com) account. Staykey can remotely manage locks, thermostats, covers, switches, and more — all through a secure, persistent connection from your Home Assistant instance.
+
+Learn more at [getstaykey.com](https://getstaykey.com).
 
 ## Features
 
