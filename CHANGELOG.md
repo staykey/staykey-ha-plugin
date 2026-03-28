@@ -1,3 +1,10 @@
+## [1.3.0](https://github.com/staykey/staykey-ha-plugin/compare/v1.2.0...v1.3.0) (2026-03-28)
+
+
+### Features
+
+* **staykey:** add gateway mode with bidirectional device control ([#5](https://github.com/staykey/staykey-ha-plugin/issues/5)) ([90ac5be](https://github.com/staykey/staykey-ha-plugin/commit/90ac5bebbd67f59d1ecbee134a77aad8915d5c73))
+
 ## [1.3.0-beta.15](https://github.com/staykey/staykey-ha-plugin/compare/v1.3.0-beta.14...v1.3.0-beta.15) (2026-03-27)
 
 
