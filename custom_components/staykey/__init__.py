@@ -38,6 +38,7 @@ from .const import (
 from .device_map import DeviceMap
 from .gateway.client import GatewayClient
 from .services.ha_bridge import create_command_handler
+from .state_filter import should_forward_state
 
 LOGGER = logging.getLogger(__name__)
 
@@ -83,6 +84,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unsubscribers: list[CALLBACK_TYPE] = []
     gateway_client: Optional[GatewayClient] = None
     device_map = DeviceMap()
+    last_sent_states: Dict[str, str] = {}
 
     # --- Gateway mode ---
     if gateway_token:
@@ -114,18 +116,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             if not new_state:
                 return
 
-            state_data: Dict[str, Any] = {
-                "state": new_state.state,
-                "last_changed": (
-                    new_state.last_changed.isoformat()
-                    if new_state.last_changed
-                    else None
-                ),
-            }
+            # Battery/health alerts fire regardless of state filtering
             attrs = new_state.attributes or {}
             if "battery_level" in attrs:
-                state_data["battery_level"] = attrs["battery_level"]
-
                 battery = attrs["battery_level"]
                 if isinstance(battery, (int, float)) and battery <= 15:
                     await gateway_client.send_health_alert(
@@ -135,6 +128,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                             "battery_level": battery,
                         },
                     )
+
+            state_value = new_state.state
+            if not should_forward_state(
+                entity_id, state_value, last_sent_states.get(entity_id)
+            ):
+                return
+
+            last_sent_states[entity_id] = state_value
+
+            state_data: Dict[str, Any] = {
+                "state": state_value,
+                "last_changed": (
+                    new_state.last_changed.isoformat()
+                    if new_state.last_changed
+                    else None
+                ),
+            }
+            if "battery_level" in attrs:
+                state_data["battery_level"] = attrs["battery_level"]
 
             await gateway_client.send_state_update(sk_device_id, state_data)
 
@@ -448,6 +460,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "unsub": unsubscribers,
         "gateway_client": gateway_client,
         "device_map": device_map,
+        "last_sent_states": last_sent_states,
     }
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
