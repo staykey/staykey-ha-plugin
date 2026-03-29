@@ -1,3 +1,10 @@
+## [1.4.0](https://github.com/staykey/staykey-ha-plugin/compare/v1.3.1...v1.4.0) (2026-03-29)
+
+
+### Features
+
+* **staykey:** filter noisy device state events before forwarding ([189c6e4](https://github.com/staykey/staykey-ha-plugin/commit/189c6e481e2660670c495fad87907247f22cafde))
+
 ## [1.3.1](https://github.com/staykey/staykey-ha-plugin/compare/v1.3.0...v1.3.1) (2026-03-28)
 
 
