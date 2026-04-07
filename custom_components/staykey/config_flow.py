@@ -29,6 +29,12 @@ class StaykeyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 2
 
+    @staticmethod
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> StaykeyOptionsFlowHandler:
+        return StaykeyOptionsFlowHandler(config_entry)
+
     async def async_step_user(self, user_input: Optional[Dict[str, Any]] = None) -> FlowResult:
         errors: Dict[str, str] = {}
 
@@ -101,7 +107,3 @@ class StaykeyOptionsFlowHandler(config_entries.OptionsFlow):
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema, errors=errors)
-
-
-async def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> StaykeyOptionsFlowHandler:
-    return StaykeyOptionsFlowHandler(config_entry)

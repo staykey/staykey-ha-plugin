@@ -97,6 +97,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             agent_version=plugin_version,
             device_map=device_map,
             command_handler=command_handler,
+            config_entry=entry,
         )
 
         await gateway_client.start()
@@ -498,10 +499,3 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
         new_data = {**config_entry.data}
         hass.config_entries.async_update_entry(config_entry, data=new_data, version=2)
     return True
-
-
-from .config_flow import StaykeyOptionsFlowHandler  # noqa: E402
-
-
-async def async_get_options_flow(entry: ConfigEntry) -> StaykeyOptionsFlowHandler:
-    return StaykeyOptionsFlowHandler(entry)
