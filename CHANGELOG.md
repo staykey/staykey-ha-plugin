@@ -1,3 +1,10 @@
+## [1.5.0-beta.1](https://github.com/staykey/staykey-ha-plugin/compare/v1.4.0...v1.5.0-beta.1) (2026-04-07)
+
+
+### Features
+
+* **staykey:** enhance config entry handling and options flow ([e6becf7](https://github.com/staykey/staykey-ha-plugin/commit/e6becf7853164e3cdd9a171c222cb3330d932373))
+
 ## [1.4.0](https://github.com/staykey/staykey-ha-plugin/compare/v1.3.1...v1.4.0) (2026-03-29)
 
 
