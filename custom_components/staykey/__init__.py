@@ -240,7 +240,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             except (asyncio.TimeoutError, ClientError) as err:
                 LOGGER.warning("Staykey webhook error: %s", err)
 
+        def _is_lock_event(event: Event) -> bool:
+            if event.event_type != ZWAVE_NOTIFICATION_EVENT:
+                return False
+            d = event.data or {}
+            return (
+                d.get("command_class") == 113
+                and d.get("type") == 6
+                and d.get("event") in (1, 2, 6)
+            )
+
         async def handle_webhook_event(event: Event) -> None:
+            if not _is_lock_event(event):
+                return
+
             # If gateway is connected, let it handle events instead
             if gateway_client and gateway_client.connected:
                 return
