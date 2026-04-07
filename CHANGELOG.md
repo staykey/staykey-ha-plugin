@@ -1,3 +1,10 @@
+## [1.5.0-beta.2](https://github.com/staykey/staykey-ha-plugin/compare/v1.5.0-beta.1...v1.5.0-beta.2) (2026-04-07)
+
+
+### Bug Fixes
+
+* update cursor rules and trigger semver release ([9b21b12](https://github.com/staykey/staykey-ha-plugin/commit/9b21b12925171d5946ea2521d509ce8399377f95))
+
 ## [1.5.0-beta.1](https://github.com/staykey/staykey-ha-plugin/compare/v1.4.0...v1.5.0-beta.1) (2026-04-07)
 
 
