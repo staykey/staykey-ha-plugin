@@ -13,10 +13,10 @@ Format:
 - Subject: imperative, concise, no trailing period
 
 Allowed types and intent:
-- feat: user-visible feature
-- fix: bug fix
-- perf: performance improvement
-- refactor: code change that does not alter behavior
+- feat: user-visible feature or new capability (triggers MINOR release)
+- fix: bug fix or correcting broken behavior (triggers PATCH release)
+- perf: performance improvement (triggers PATCH release)
+- refactor: ONLY for internal restructuring with zero behavior change — no new features, no bug fixes, no user-visible difference
 - docs: documentation only
 - style: formatting, lint, non-functional styling
 - test: add or improve tests
@@ -24,6 +24,16 @@ Allowed types and intent:
 - ci: CI configuration or scripts
 - chore: maintenance tasks (no src/app behavior change)
 - revert: revert a previous commit
+
+CRITICAL for semantic-release: Only feat, fix, and perf trigger a release.
+All other types (refactor, docs, style, test, build, ci, chore) do NOT
+create a release and users will NOT receive the update via HACS.
+
+Type selection guide:
+- If the change fixes something that was broken -> fix
+- If the change adds new behavior or capability -> feat
+- If the change moves code around but nothing works differently -> refactor
+- When in doubt between refactor and fix/feat, prefer fix or feat
 
 Breaking changes:
 - Add a footer starting with "BREAKING CHANGE:" describing the impact
