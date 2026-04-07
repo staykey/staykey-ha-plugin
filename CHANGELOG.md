@@ -1,3 +1,16 @@
+## [1.5.0](https://github.com/staykey/staykey-ha-plugin/compare/v1.4.0...v1.5.0) (2026-04-07)
+
+
+### Features
+
+* **staykey:** add lock event filtering to webhook handling ([7952038](https://github.com/staykey/staykey-ha-plugin/commit/7952038501a7ad3ddb033bcd8c71e46c71722dad))
+* **staykey:** enhance config entry handling and options flow ([e6becf7](https://github.com/staykey/staykey-ha-plugin/commit/e6becf7853164e3cdd9a171c222cb3330d932373))
+
+
+### Bug Fixes
+
+* update cursor rules and trigger semver release ([9b21b12](https://github.com/staykey/staykey-ha-plugin/commit/9b21b12925171d5946ea2521d509ce8399377f95))
+
 ## [1.5.0-beta.3](https://github.com/staykey/staykey-ha-plugin/compare/v1.5.0-beta.2...v1.5.0-beta.3) (2026-04-07)
 
 
