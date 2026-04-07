@@ -1,3 +1,10 @@
+## [1.5.0-beta.3](https://github.com/staykey/staykey-ha-plugin/compare/v1.5.0-beta.2...v1.5.0-beta.3) (2026-04-07)
+
+
+### Features
+
+* **staykey:** add lock event filtering to webhook handling ([7952038](https://github.com/staykey/staykey-ha-plugin/commit/7952038501a7ad3ddb033bcd8c71e46c71722dad))
+
 ## [1.5.0-beta.2](https://github.com/staykey/staykey-ha-plugin/compare/v1.5.0-beta.1...v1.5.0-beta.2) (2026-04-07)
 
 
