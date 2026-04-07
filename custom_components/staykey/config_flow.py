@@ -6,7 +6,6 @@ from typing import Any, Dict, Optional
 
 import voluptuous as vol
 from homeassistant import config_entries
-from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 
 from .const import (
@@ -24,48 +23,7 @@ from .const import (
 )
 
 
-class StaykeyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Staykey."""
-
-    VERSION = 2
-
-    @staticmethod
-    def async_get_options_flow(
-        config_entry: config_entries.ConfigEntry,
-    ) -> StaykeyOptionsFlowHandler:
-        return StaykeyOptionsFlowHandler(config_entry)
-
-    async def async_step_user(self, user_input: Optional[Dict[str, Any]] = None) -> FlowResult:
-        errors: Dict[str, str] = {}
-
-        if user_input is not None:
-            gateway_token = user_input.get(CONF_GATEWAY_TOKEN, "").strip()
-            endpoint_url = user_input.get(CONF_ENDPOINT_URL, "").strip()
-
-            if not gateway_token and not endpoint_url:
-                errors["base"] = "must_provide_token_or_url"
-            else:
-                unique_id = gateway_token or endpoint_url
-                await self.async_set_unique_id(unique_id)
-                self._abort_if_unique_id_configured()
-                return self.async_create_entry(title="Staykey", data=user_input)
-
-        data_schema = vol.Schema(
-            {
-                vol.Optional(CONF_GATEWAY_TOKEN, default=""): str,
-                vol.Optional(CONF_GATEWAY_URL, default=DEFAULT_GATEWAY_URL): str,
-                vol.Optional(CONF_ENDPOINT_URL, default=""): str,
-            }
-        )
-        return self.async_show_form(step_id="user", data_schema=data_schema, errors=errors)
-
-    async def async_step_import(self, user_input: Dict[str, Any]) -> FlowResult:
-        return await self.async_step_user(user_input)
-
-
 class StaykeyOptionsFlowHandler(config_entries.OptionsFlow):
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        self.config_entry = config_entry
 
     async def async_step_init(self, user_input: Optional[Dict[str, Any]] = None) -> FlowResult:
         errors: Dict[str, str] = {}
@@ -107,3 +65,42 @@ class StaykeyOptionsFlowHandler(config_entries.OptionsFlow):
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema, errors=errors)
+
+
+class StaykeyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    """Handle a config flow for Staykey."""
+
+    VERSION = 2
+
+    @staticmethod
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> StaykeyOptionsFlowHandler:
+        return StaykeyOptionsFlowHandler()
+
+    async def async_step_user(self, user_input: Optional[Dict[str, Any]] = None) -> FlowResult:
+        errors: Dict[str, str] = {}
+
+        if user_input is not None:
+            gateway_token = user_input.get(CONF_GATEWAY_TOKEN, "").strip()
+            endpoint_url = user_input.get(CONF_ENDPOINT_URL, "").strip()
+
+            if not gateway_token and not endpoint_url:
+                errors["base"] = "must_provide_token_or_url"
+            else:
+                unique_id = gateway_token or endpoint_url
+                await self.async_set_unique_id(unique_id)
+                self._abort_if_unique_id_configured()
+                return self.async_create_entry(title="Staykey", data=user_input)
+
+        data_schema = vol.Schema(
+            {
+                vol.Optional(CONF_GATEWAY_TOKEN, default=""): str,
+                vol.Optional(CONF_GATEWAY_URL, default=DEFAULT_GATEWAY_URL): str,
+                vol.Optional(CONF_ENDPOINT_URL, default=""): str,
+            }
+        )
+        return self.async_show_form(step_id="user", data_schema=data_schema, errors=errors)
+
+    async def async_step_import(self, user_input: Dict[str, Any]) -> FlowResult:
+        return await self.async_step_user(user_input)
