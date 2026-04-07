@@ -7,6 +7,7 @@ import logging
 from typing import Any, Callable, Coroutine, Dict, Optional
 
 import aiohttp
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import __version__ as HA_VERSION
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
@@ -40,6 +41,7 @@ class GatewayClient:
         command_handler: Callable[
             [str, str, Dict[str, Any]], Coroutine[Any, Any, Dict[str, Any]]
         ],
+        config_entry: Optional[ConfigEntry] = None,
     ) -> None:
         self._hass = hass
         self._gateway_url = gateway_url
@@ -47,6 +49,7 @@ class GatewayClient:
         self._agent_version = agent_version
         self._device_map = device_map
         self._command_handler = command_handler
+        self._config_entry = config_entry
         self._ws: Optional[aiohttp.ClientWebSocketResponse] = None
         self._running = False
         self._reconnect_task: Optional[asyncio.Task] = None
@@ -194,6 +197,13 @@ class GatewayClient:
             "Gateway authenticated (gateway_version=%s)",
             response.get("gateway_version"),
         )
+
+        property_name = response.get("property_name")
+        if property_name and self._config_entry and property_name != self._config_entry.title:
+            self._hass.config_entries.async_update_entry(
+                self._config_entry, title=property_name
+            )
+            LOGGER.info("Updated config entry title to %r", property_name)
 
         ha_version = HA_VERSION
         features = [
