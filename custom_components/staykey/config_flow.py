@@ -10,12 +10,10 @@ from homeassistant.data_entry_flow import FlowResult
 
 from .const import (
     CONF_ENDPOINT_URL,
-    CONF_FORWARD_ALL_NOTIFICATIONS,
     CONF_GATEWAY_TOKEN,
     CONF_GATEWAY_URL,
     CONF_TIMEOUT,
     CONF_VERIFY_SSL,
-    DEFAULT_FORWARD_ALL_NOTIFICATIONS,
     DEFAULT_GATEWAY_URL,
     DEFAULT_TIMEOUT_SECONDS,
     DEFAULT_VERIFY_SSL,
@@ -43,12 +41,6 @@ class StaykeyOptionsFlowHandler(config_entries.OptionsFlow):
                     CONF_GATEWAY_URL,
                     default=options.get(CONF_GATEWAY_URL, data.get(CONF_GATEWAY_URL, DEFAULT_GATEWAY_URL)),
                 ): str,
-                vol.Optional(
-                    CONF_FORWARD_ALL_NOTIFICATIONS,
-                    default=options.get(
-                        CONF_FORWARD_ALL_NOTIFICATIONS, DEFAULT_FORWARD_ALL_NOTIFICATIONS
-                    ),
-                ): bool,
                 vol.Optional(
                     CONF_VERIFY_SSL, default=options.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL)
                 ): bool,

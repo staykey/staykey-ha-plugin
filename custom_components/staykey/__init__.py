@@ -21,12 +21,10 @@ from homeassistant.loader import async_get_integration
 
 from .const import (
     CONF_ENDPOINT_URL,
-    CONF_FORWARD_ALL_NOTIFICATIONS,
     CONF_GATEWAY_TOKEN,
     CONF_GATEWAY_URL,
     CONF_TIMEOUT,
     CONF_VERIFY_SSL,
-    DEFAULT_FORWARD_ALL_NOTIFICATIONS,
     DEFAULT_GATEWAY_URL,
     DEFAULT_TIMEOUT_SECONDS,
     DEFAULT_VERIFY_SSL,
@@ -72,9 +70,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         LOGGER.error("Staykey missing both gateway token and webhook URL; aborting setup")
         return False
 
-    forward_all_notifications: bool = options.get(
-        CONF_FORWARD_ALL_NOTIFICATIONS, DEFAULT_FORWARD_ALL_NOTIFICATIONS
-    )
     verify_ssl: bool = options.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL)
     timeout_seconds: int = options.get(CONF_TIMEOUT, DEFAULT_TIMEOUT_SECONDS)
 
@@ -245,22 +240,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             except (asyncio.TimeoutError, ClientError) as err:
                 LOGGER.warning("Staykey webhook error: %s", err)
 
-        def is_whitelisted_event(event: Event) -> bool:
-            if event.event_type != ZWAVE_NOTIFICATION_EVENT:
-                return False
-            d = event.data or {}
-            if d.get("command_class") != 113:
-                return False
-            if d.get("type") != 6:
-                return False
-            if d.get("event") not in (1, 2, 6):
-                return False
-            return True
-
         async def handle_webhook_event(event: Event) -> None:
-            if not forward_all_notifications and not is_whitelisted_event(event):
-                return
-
             # If gateway is connected, let it handle events instead
             if gateway_client and gateway_client.connected:
                 return
@@ -467,11 +447,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     mode = "gateway" if gateway_token else "webhook-only"
-    LOGGER.info(
-        "Staykey set up in %s mode. Forwarding %s notifications.",
-        mode,
-        "all" if forward_all_notifications else "user-code",
-    )
+    LOGGER.info("Staykey set up in %s mode.", mode)
     return True
 
 
