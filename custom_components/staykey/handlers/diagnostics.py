@@ -8,7 +8,7 @@ from typing import Any, Dict
 from homeassistant.core import HomeAssistant
 
 from ..device_map import DeviceMap
-from ..services import zwave
+from ..services.providers import zwave as zwave_provider
 
 LOGGER = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ async def handle_get_diagnostics(
             state.last_updated.isoformat() if state.last_updated else None
         )
 
-    node_info = await zwave.get_node_info(hass, entity_id)
+    node_info = await zwave_provider.get_node_info(hass, entity_id)
     if node_info:
         diagnostics["zwave_status"] = node_info.get("status", "unknown")
         diagnostics["zwave_ready"] = node_info.get("ready", False)
