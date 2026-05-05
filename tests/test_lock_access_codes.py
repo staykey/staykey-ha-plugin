@@ -220,6 +220,38 @@ def test_matter_set_code_calls_only_set_lock_credential_on_happy_path():
     assert result.extra["credential_index"] == 7
 
 
+def test_matter_set_code_omits_user_status_and_sends_user_type():
+    """Bolt SE Add-rejection workaround: ``user_status`` must not be
+    sent on the wire and ``user_type`` must be sent explicitly as
+    ``unrestricted_user``.  See providers/matter.py moduledoc.
+    """
+    from services.providers.matter import MatterLockProvider
+
+    hass = _FakeHass()
+    hass.services.register(
+        "matter",
+        "set_lock_credential",
+        {
+            "lock.front_door": {
+                "credential_index": 5,
+                "user_index": 5,
+                "next_credential_index": 6,
+            }
+        },
+    )
+
+    provider = MatterLockProvider()
+    _run(provider.set_code(hass, "lock.front_door", 5, "0000"))
+
+    set_call_data = hass.services.calls[0][2]
+    assert "user_status" not in set_call_data, (
+        "user_status must be omitted to avoid Bolt SE Add-rejection"
+    )
+    assert set_call_data.get("user_type") == "unrestricted_user", (
+        "user_type must be set explicitly to avoid Bolt SE Add-rejection"
+    )
+
+
 def test_matter_set_code_treats_duplicate_status_as_verified():
     from homeassistant.exceptions import HomeAssistantError
 
@@ -264,6 +296,36 @@ def test_matter_set_code_surfaces_non_duplicate_error_as_failure():
 
     assert result.verified is False
     assert "set_lock_credential" in (result.error or "")
+    assert result.extra.get("matter_status") == "occupied"
+    assert "matter_status=occupied" in (result.error or "")
+
+
+def test_matter_set_code_surfaces_unknown_im_status_in_extra_and_error():
+    """Reproduction of the Bolt SE rejection: HA renders IM-level
+    status codes as ``unknown(<int>)`` because they aren't in
+    ``SET_CREDENTIAL_STATUS_MAP``.  We must surface that verbatim so
+    Orion's activity log shows the actual lock status.
+    """
+    from homeassistant.exceptions import HomeAssistantError
+
+    from services.providers.matter import MatterLockProvider
+
+    hass = _FakeHass()
+    hass.services.register(
+        "matter",
+        "set_lock_credential",
+        HomeAssistantError(
+            "Failed to set credential: lock returned status `unknown(133)`.",
+            translation_placeholders={"status": "unknown(133)"},
+        ),
+    )
+
+    provider = MatterLockProvider()
+    result = _run(provider.set_code(hass, "lock.front_door", 10, "5678"))
+
+    assert result.verified is False
+    assert result.extra.get("matter_status") == "unknown(133)"
+    assert "matter_status=unknown(133)" in (result.error or "")
 
 
 def test_matter_set_code_does_not_call_set_lock_user():

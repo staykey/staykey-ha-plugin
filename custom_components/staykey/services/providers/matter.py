@@ -35,6 +35,29 @@ user, the lock auto-creates that user with default attributes.  HA's
 "new user + new credential" and "update existing credential" cases for
 arbitrary caller-supplied slot numbers.
 
+## SetCredential parameter conservatism
+
+Real-world testing on the Ultraloq Bolt SE turned up a fresh-Add
+rejection with HA-rendered status ``unknown(133)``.  HA only maps
+DlStatus values 0x00-0x03 in ``SET_CREDENTIAL_STATUS_MAP``, so anything
+else surfaces as ``unknown(<int>)``; ``133 = 0x85`` is the Matter
+Interaction Model ``INVALID_COMMAND`` general status code, which means
+the lock rejected the command before applying it.  The most likely
+irritants the spec marks as caller-optional but some implementations
+choke on:
+
+* ``userStatus`` set explicitly on a fresh ``kAdd``.  Spec says the
+  lock should default to ``kOccupiedEnabled`` when null; the Bolt SE
+  appears to reject the explicit value.  We omit it on the wire and
+  let the lock pick its default.
+* ``userType`` left null on a fresh ``kAdd``.  Spec says the lock
+  should default to ``kUnrestrictedUser``; the Bolt SE appears to
+  require it explicitly.  We always send ``unrestricted_user``.
+
+This keeps the happy path identical for spec-compliant locks (Z-Wave
+locks bridged via Matter, Aqara, Schlage Sense Pro, etc.) while
+unblocking the Bolt SE.
+
 ## Verification semantics
 
 * ``matter.set_lock_credential`` returns its result synchronously
@@ -45,6 +68,11 @@ arbitrary caller-supplied slot numbers.
   same credential bytes are already programmed in that slot — treated
   as a verified no-op (important for Oban retries that succeeded
   silently the first time).
+* On any other rejection we extract the structured Matter status from
+  the exception's ``translation_placeholders`` and surface it both in
+  logs and in ``ProviderResult.extra["matter_status"]`` /
+  ``ProviderResult.error`` so Orion's activity log shows the actual
+  Matter status code rather than just "set_lock_credential failed".
 * As a defensive sanity check we fall back to
   ``matter.get_lock_credential_status`` when the set call returns
   without a usable ``credential_index`` for any other reason.
@@ -67,6 +95,9 @@ LOGGER = logging.getLogger(__name__)
 _MATTER_DOMAIN = "matter"
 _PIN = "pin"
 _USER_TYPE_DEFAULT = "unrestricted_user"
+
+# Kept for backwards compatibility / external readers; no longer sent
+# on set_lock_credential — see module docstring (Bolt SE workaround).
 _USER_STATUS_ENABLED = "occupied_enabled"
 
 # DoorLock SetCredential status codes that are non-fatal for our use
@@ -99,23 +130,36 @@ class MatterLockProvider:
         * If the new PIN bytes match what's already there, the lock
           returns ``duplicate`` status — we treat that as success.
 
+        We deliberately omit ``user_status`` and always send
+        ``user_type=unrestricted_user`` — see this module's docstring
+        for the rationale (Bolt SE Add-rejection workaround).
+
         Falls back to ``matter.get_lock_credential_status`` only if the
         set call returns without a usable ``credential_index`` and
         didn't raise.
         """
+        request_payload: Dict[str, Any] = {
+            "entity_id": entity_id,
+            "credential_type": _PIN,
+            "credential_data": str(code),
+            "credential_index": slot,
+            "user_index": slot,
+            "user_type": _USER_TYPE_DEFAULT,
+        }
+        LOGGER.debug(
+            "matter.set_lock_credential request: entity_id=%s slot=%d "
+            "user_type=%s (user_status omitted intentionally)",
+            entity_id,
+            slot,
+            _USER_TYPE_DEFAULT,
+        )
+
         set_response: Optional[Dict[str, Any]] = None
         try:
             set_response = await hass.services.async_call(
                 _MATTER_DOMAIN,
                 "set_lock_credential",
-                {
-                    "entity_id": entity_id,
-                    "credential_type": _PIN,
-                    "credential_data": str(code),
-                    "credential_index": slot,
-                    "user_index": slot,
-                    "user_status": _USER_STATUS_ENABLED,
-                },
+                request_payload,
                 blocking=True,
                 return_response=True,
             )
@@ -133,14 +177,24 @@ class MatterLockProvider:
                     verified=True,
                     extra={"status": _DUPLICATE_STATUS},
                 )
-            LOGGER.exception(
-                "matter.set_lock_credential failed for %s slot %d", entity_id, slot
+            matter_status = _extract_matter_status(exc)
+            LOGGER.error(
+                "matter.set_lock_credential failed for %s slot %d "
+                "(matter_status=%s): %s",
+                entity_id,
+                slot,
+                matter_status or "<unknown>",
+                exc,
             )
+            extra: Dict[str, Any] = {}
+            if matter_status is not None:
+                extra["matter_status"] = matter_status
             return ProviderResult(
                 slot=slot,
                 method="matter_set_credential",
                 verified=False,
-                error=f"set_lock_credential: {exc}",
+                error=_format_set_error(matter_status, exc),
+                extra=extra,
             )
         except Exception as exc:
             LOGGER.exception(
@@ -292,6 +346,37 @@ def _is_duplicate_credential_error(exc: BaseException) -> bool:
         return True
 
     return _DUPLICATE_STATUS in str(exc).lower()
+
+
+def _extract_matter_status(exc: BaseException) -> Optional[str]:
+    """Pull the structured Matter status out of an HA exception.
+
+    HA's matter lock helpers raise with
+    ``translation_placeholders={"status": "<value>"}`` where ``<value>``
+    is one of the DlStatus strings (``failure``, ``duplicate``,
+    ``occupied``) or ``unknown(<int>)`` for IM-level codes the helper
+    didn't map.  We surface this verbatim so operators can correlate
+    against Matter spec status tables.
+    """
+    placeholders = getattr(exc, "translation_placeholders", None)
+    if isinstance(placeholders, dict):
+        status = placeholders.get("status")
+        if isinstance(status, str) and status:
+            return status
+    return None
+
+
+def _format_set_error(matter_status: Optional[str], exc: BaseException) -> str:
+    """Build the ProviderResult.error string with the Matter status if present.
+
+    Including the status code in the error string means it propagates
+    through Orion's ``DeviceService.classify_action_body/1`` /
+    ``ActivityService.format_error_reason/1`` chain into the user-facing
+    activity log without any further plumbing.
+    """
+    if matter_status:
+        return f"set_lock_credential: matter_status={matter_status}: {exc}"
+    return f"set_lock_credential: {exc}"
 
 
 async def _get_credential_status(
