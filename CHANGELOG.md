@@ -1,3 +1,10 @@
+## [1.6.0-beta.2](https://github.com/staykey/staykey-ha-plugin/compare/v1.6.0-beta.1...v1.6.0-beta.2) (2026-05-05)
+
+
+### Features
+
+* **staykey:** improve Matter lock credential handling and error reporting ([b46fbe6](https://github.com/staykey/staykey-ha-plugin/commit/b46fbe6ac841d8a493b04ed71cf20c0f5baf1052))
+
 ## [1.6.0-beta.1](https://github.com/staykey/staykey-ha-plugin/compare/v1.5.0...v1.6.0-beta.1) (2026-05-05)
 
 
