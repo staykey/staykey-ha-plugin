@@ -1,3 +1,10 @@
+## [1.6.0-beta.1](https://github.com/staykey/staykey-ha-plugin/compare/v1.5.0...v1.6.0-beta.1) (2026-05-05)
+
+
+### Features
+
+* **staykey:** enhance lock handling with protocol-specific providers ([eb432fe](https://github.com/staykey/staykey-ha-plugin/commit/eb432fed11665e9a32f96b24e5094cb41d79b130))
+
 ## [1.5.0](https://github.com/staykey/staykey-ha-plugin/compare/v1.4.0...v1.5.0) (2026-04-07)
 
 
