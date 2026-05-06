@@ -1,3 +1,10 @@
+## [1.6.0-beta.7](https://github.com/staykey/staykey-ha-plugin/compare/v1.6.0-beta.6...v1.6.0-beta.7) (2026-05-06)
+
+
+### Bug Fixes
+
+* **staykey:** improve PIN slot capacity calculation and documentation ([e567a3c](https://github.com/staykey/staykey-ha-plugin/commit/e567a3cdc8701ba4aae4d8b5bc65d6f2280aed21))
+
 ## [1.6.0-beta.6](https://github.com/staykey/staykey-ha-plugin/compare/v1.6.0-beta.5...v1.6.0-beta.6) (2026-05-06)
 
 
