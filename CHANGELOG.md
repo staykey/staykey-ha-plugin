@@ -1,3 +1,10 @@
+## [1.6.0-beta.8](https://github.com/staykey/staykey-ha-plugin/compare/v1.6.0-beta.7...v1.6.0-beta.8) (2026-05-06)
+
+
+### Features
+
+* **staykey:** add tap_events action to handle event taps ([5e2c33a](https://github.com/staykey/staykey-ha-plugin/commit/5e2c33ac05ec5570b316ca2033069d0486ea0bba))
+
 ## [1.6.0-beta.7](https://github.com/staykey/staykey-ha-plugin/compare/v1.6.0-beta.6...v1.6.0-beta.7) (2026-05-06)
 
 
