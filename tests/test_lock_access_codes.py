@@ -766,8 +766,14 @@ def test_matter_modify_path_unaffected_by_stacking_capabilities():
 def test_matter_get_capabilities_exposes_max_users_and_credentials_per_user():
     """``get_capabilities`` must surface all three Matter capacity caps so
     Orion's CapabilityLearner can persist them: ``max_users``,
-    ``max_credentials_per_user``, and the derived ``max_slots`` (their
-    product when stacking is supported).
+    ``max_credentials_per_user``, and the derived ``max_slots``.
+
+    ``max_slots`` is conservative — equal to ``max_users`` even when
+    the lock advertises ``max_credentials_per_user >= 2`` — because
+    real-world firmware (Ultraloq Bolt SE) caps global credentials at
+    the user count regardless of the spec's implied ``U × C`` ceiling.
+    Catalogued locks that genuinely support the full product can
+    override via ``SupportedDevice.default_settings`` in Orion.
     """
     from services.providers.matter import MatterLockProvider
 
@@ -792,9 +798,12 @@ def test_matter_get_capabilities_exposes_max_users_and_credentials_per_user():
     assert caps.supports_access_codes is True
     assert caps.max_users == 10
     assert caps.max_credentials_per_user == 5
-    assert caps.max_slots == 50, (
-        "max_slots must be max_users * max_credentials_per_user when "
-        "stacking is supported (Bolt SE: 10 users × 5 PINs = 50 slots)"
+    assert caps.max_slots == 10, (
+        "max_slots must be conservative (== max_users) — the "
+        "max_credentials_per_user cap is consumed by the user-stacking "
+        "branch in set_code, not multiplied into max_slots, because "
+        "vendor firmware caps global PIN credentials at max_users in "
+        "practice (Bolt SE)"
     )
 
 

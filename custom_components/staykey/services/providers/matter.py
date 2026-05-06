@@ -920,17 +920,30 @@ def _derive_max_slots(
     max_users: Optional[int],
     max_credentials_per_user: Optional[int],
 ) -> Optional[int]:
-    """Compute total effective PIN slots from the two Matter capacity caps.
+    """Compute the conservative PIN slot capacity from Matter capacity caps.
 
-    With user-stacking (``max_credentials_per_user >= 2``) the lock can
-    hold ``max_users * max_credentials_per_user`` PINs total — e.g. the
-    Bolt SE's 10 users × 5 credentials = 50 slots.  When the per-user cap
-    isn't advertised (or is 1) we fall back to ``max_users`` directly,
-    matching the pre-stacking behaviour.  Returns ``None`` when we can't
-    determine a positive count.
+    The Matter spec (§5.2.4.41) implies a lock that advertises
+    ``NumberOfPINUsersSupported = U`` and
+    ``NumberOfCredentialsSupportedPerUser = C`` can hold ``U × C`` PIN
+    credentials.  In practice some firmware (e.g. Ultraloq Bolt SE)
+    enforces a tighter global cap equal to ``U`` even though the
+    per-user cap is C > 1 — empirically the Bolt SE rejects
+    credential_index 11+ once 10 PIN credentials are programmed,
+    regardless of how those credentials are distributed across users.
+
+    We therefore default ``max_slots`` to ``max_users`` only.
+    User-stacking (multiple credentials sharing one ``user_index``) is
+    still supported on the wire — see ``set_code`` and
+    ``_find_existing_user_index_in_group`` — because it has
+    architectural value beyond raw capacity (recipient resolution,
+    keeping a guest's stay-+-cleaning credentials under one lock-side
+    user, etc.).  Catalogued locks that we verify support the spec's
+    full ``U × C`` cap can override ``max_codes`` via
+    ``SupportedDevice.default_settings``.
+
+    Returns ``None`` when we can't determine a positive count.
     """
-    if max_users is None:
-        return None
-    if max_credentials_per_user is None or max_credentials_per_user <= 1:
+    _ = max_credentials_per_user  # consulted by callers, not max-slots derivation
+    if isinstance(max_users, int) and max_users > 0:
         return max_users
-    return max_users * max_credentials_per_user
+    return None
