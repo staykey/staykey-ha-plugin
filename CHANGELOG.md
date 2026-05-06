@@ -1,3 +1,10 @@
+## [1.6.0-beta.3](https://github.com/staykey/staykey-ha-plugin/compare/v1.6.0-beta.2...v1.6.0-beta.3) (2026-05-06)
+
+
+### Bug Fixes
+
+* **staykey:** correct handling of user status and type in SetCredential ([28b1045](https://github.com/staykey/staykey-ha-plugin/commit/28b104536dd3d4dffdf2e607144e03bc07ae68cc))
+
 ## [1.6.0-beta.2](https://github.com/staykey/staykey-ha-plugin/compare/v1.6.0-beta.1...v1.6.0-beta.2) (2026-05-05)
 
 
