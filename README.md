@@ -95,3 +95,4 @@ This repository uses semantic versioning with automated releases:
 2. The release workflow computes the next version, updates `CHANGELOG.md` and `manifest.json`, creates a GitHub release, and tags it
 
 HACS detects new releases automatically from GitHub tags.
+
