@@ -18,21 +18,26 @@ We therefore mirror the flow the official HA Matter Lock Manager UI
 uses, which is known to work on Aqara U200/U300, Yale Assure 2,
 Schlage Sense Pro, Z-Wave-via-Matter bridges, and the Bolt SE.
 
-## Two-path SetCredential by slot occupancy
+## Three-branch SetCredential by slot occupancy and user-group state
 
 We always pre-flight the slot with ``matter.get_lock_credential_status``
 to learn (a) whether HA will pick ``kAdd`` or ``kModify`` and (b) the
-current user_index for Modify.  Then we send a single
-``matter.set_lock_credential`` shaped for that path:
+current user_index for Modify.  On Add we also call
+``matter.get_lock_info`` to learn ``max_credentials_per_user`` (Matter
+§5.2.4.41), and when the lock supports user-stacking (>=2) we probe
+sibling slots in the same user-group to discover an existing
+user_index.  Then we send a single ``matter.set_lock_credential``
+shaped for that branch:
 
-================  ===============  ==========  ==========  =========================
-Slot state        operation        user_index  user_type   user_status
-================  ===============  ==========  ==========  =========================
-Empty (Add)       HA picks kAdd    *null*      ``unrestricted_user``  *null*
-Occupied (Modify) HA picks kModify existing N  *null*      *null*
-================  ===============  ==========  ==========  =========================
+==================================  ===============  ==========  =====================  ===========
+Slot / user-group state             operation        user_index  user_type              user_status
+==================================  ===============  ==========  =====================  ===========
+Empty slot, group has no siblings   HA picks kAdd    *null*      ``unrestricted_user``  *null*
+Empty slot, group has a sibling     HA picks kAdd    discovered  *null*                 *null*
+Occupied slot                       HA picks kModify existing N  *null*                 *null*
+==================================  ===============  ==========  =====================  ===========
 
-Both shapes are spec-compliant per Matter 1.x §5.2.4.40 and the
+All three shapes are spec-compliant per Matter 1.x §5.2.4.40 and the
 connectedhomeip validity check (``DoorLockServer::SetCredential``,
 chip ``16657402aa``):
 
@@ -154,37 +159,73 @@ class MatterLockProvider:
     ) -> ProviderResult:
         """Set a PIN credential for *slot*, auto-creating the user if needed.
 
-        Two-path single ``matter.set_lock_credential`` call, branched on
-        the slot's current occupancy as observed via
-        ``matter.get_lock_credential_status``:
+        Three-branch single ``matter.set_lock_credential`` call.  We
+        first preflight the slot via
+        ``matter.get_lock_credential_status``; on the Add path we also
+        check ``matter.get_lock_info`` for ``max_credentials_per_user``
+        and, when the lock supports user-stacking (Matter §5.2.4.41,
+        e.g. Bolt SE: 5 PINs per user), probe the other slots in the
+        same user-group for an existing user_index:
 
-        * **Empty slot (Add path)** — send ``credential_index=slot``,
-          ``user_index=null``, ``user_type=unrestricted_user``,
-          ``user_status=null``.  HA's helper sees the empty slot and
-          dispatches ``SetCredential(kAdd)``; the lock allocates a
-          fresh user with the supplied user_type and attaches the PIN
-          at our ``credential_index``.
-        * **Occupied slot (Modify path)** — send
+        * **Modify path (slot has a credential)** — send
           ``credential_index=slot``,
           ``user_index=<existing user from GetCredentialStatus>``, both
           ``user_status`` and ``user_type`` null.  HA dispatches
           ``SetCredential(kModify)`` and the lock updates the PIN
           bytes for the existing user.
+        * **Add path, fresh user-group** (no other slot in this
+          credential's user-group is occupied) — send
+          ``credential_index=slot``, ``user_index=null``,
+          ``user_type=unrestricted_user``, ``user_status=null``.  HA
+          dispatches ``SetCredential(kAdd)``; the lock auto-allocates a
+          fresh user with the supplied user_type and attaches the PIN
+          at our ``credential_index``.  This is also the path used for
+          non-stacking locks where ``max_credentials_per_user`` is None
+          or 1.
+        * **Add path, existing user-group** (another slot in this
+          credential's user-group is already occupied) — send
+          ``credential_index=slot``,
+          ``user_index=<discovered from sibling slot>``, both
+          ``user_status`` and ``user_type`` null.  HA dispatches
+          ``SetCredential(kAdd)`` but with a non-null userIndex, so the
+          lock attaches the PIN to the existing user without modifying
+          its attributes.  This is what unlocks user-stacking on the
+          Bolt SE: the lock auto-creates the user only on the first
+          credential, and we attach the rest by discovered user_index.
 
         If the lock returns ``duplicate`` (same PIN bytes already
         programmed), we treat that as a verified no-op so Oban retries
         of an op that succeeded silently the first time still
         converge.
 
-        See the module docstring for why this two-path shape is
-        necessary (Bolt SE rejects ``kAdd`` with non-null userIndex
-        despite the spec).
+        See the module docstring for why we never send a non-null
+        userIndex pointing at an *empty* user slot (Bolt SE rejects
+        that combination despite the spec describing it).
         """
         started_at = time.monotonic()
 
         existing = await _get_credential_status(hass, entity_id, slot)
         is_modify = bool(existing and existing.get("credential_exists"))
         operation = "modify" if is_modify else "add"
+
+        # On the Add path we may need the lock's per-user credential cap to
+        # decide whether to attach to an existing user (user-stacking, e.g.
+        # Bolt SE: 5 PINs per user) or let the lock auto-allocate a fresh
+        # user.  Modify never needs it — we always reuse the credential's
+        # current user_index.
+        max_credentials_per_user: Optional[int] = None
+        stacked_user_index: Optional[int] = None
+        if not is_modify:
+            info = await _get_lock_info(hass, entity_id)
+            if info:
+                max_credentials_per_user = _extract_max_credentials_per_user(info)
+            if (
+                max_credentials_per_user is not None
+                and max_credentials_per_user >= 2
+            ):
+                stacked_user_index = await _find_existing_user_index_in_group(
+                    hass, entity_id, slot, max_credentials_per_user
+                )
 
         request_payload: Dict[str, Any] = {
             "entity_id": entity_id,
@@ -198,18 +239,31 @@ class MatterLockProvider:
                 request_payload["user_index"] = existing_user_index
             # No user_type / user_status: must both be null on Modify
             # when userIndex is non-null (chip SDK validity check).
+        elif stacked_user_index is not None:
+            # Add path, but another credential in this user-group is
+            # already programmed — attach this PIN to the same lock-side
+            # user.  user_index pinpoints the existing user; user_type /
+            # user_status MUST be null so the lock keeps the existing
+            # user record intact (matches HA's "add credential to user"
+            # UI flow on the Bolt SE).
+            request_payload["user_index"] = stacked_user_index
         else:
             # No user_index → null on the wire → lock auto-allocates a
-            # fresh user.  user_type describes that new user.
+            # fresh user.  user_type describes that new user.  This is
+            # also the path for non-stacking locks (1 credential per
+            # user) where ``max_credentials_per_user`` is None or 1.
             request_payload["user_type"] = _USER_TYPE_DEFAULT
         LOGGER.debug(
             "matter.set_lock_credential request: entity_id=%s slot=%d "
-            "operation=%s code_length=%d existing_user_index=%s",
+            "operation=%s code_length=%d user_index=%s "
+            "max_credentials_per_user=%s stacked=%s",
             entity_id,
             slot,
             operation,
             len(code),
             request_payload.get("user_index", "<auto>"),
+            max_credentials_per_user if max_credentials_per_user is not None else "-",
+            stacked_user_index is not None,
         )
 
         set_response: Optional[Dict[str, Any]] = None
@@ -497,10 +551,14 @@ class MatterLockProvider:
             bool(info.get("supports_user_management"))
             and _PIN in (info.get("supported_credential_types") or [])
         )
-        max_slots = info.get("max_pin_users") or info.get("max_users")
+        max_users = _extract_max_users(info)
+        max_credentials_per_user = _extract_max_credentials_per_user(info)
+        max_slots = _derive_max_slots(max_users, max_credentials_per_user)
         return CapabilityInfo(
             supports_access_codes=supports,
             max_slots=max_slots,
+            max_users=max_users,
+            max_credentials_per_user=max_credentials_per_user,
             extra=info,
         )
 
@@ -620,11 +678,17 @@ async def _enrich_with_capacity_context(
     if not info:
         return
 
-    max_slots = info.get("max_pin_users") or info.get("max_users")
+    max_users = _extract_max_users(info)
+    max_credentials_per_user = _extract_max_credentials_per_user(info)
+    max_slots = _derive_max_slots(max_users, max_credentials_per_user)
     if not isinstance(max_slots, int) or max_slots <= 0:
         return
 
     extra["max_slots"] = max_slots
+    if max_users is not None:
+        extra["max_users"] = max_users
+    if max_credentials_per_user is not None:
+        extra["max_credentials_per_user"] = max_credentials_per_user
     extra["slot"] = slot
     if slot > max_slots:
         extra["reason"] = "slot_out_of_range"
@@ -719,6 +783,58 @@ def _format_log_error(error: Optional[str], exc: Optional[BaseException]) -> str
     return "-"
 
 
+async def _find_existing_user_index_in_group(
+    hass: HomeAssistant,
+    entity_id: str,
+    slot: int,
+    max_credentials_per_user: int,
+) -> Optional[int]:
+    """Probe other slots in the same user-group for an existing user_index.
+
+    Matter §5.2.4.41 lets each lock user hold up to
+    ``NumberOfCredentialsSupportedPerUser`` PIN credentials.  To attach a
+    new credential to that user we need its lock-side ``user_index``,
+    which the lock allocates dynamically — we don't pick it.  When adding
+    the second-or-later credential of a user we discover the user_index
+    by reading any other occupied slot in the same group.
+
+    A "user-group" is the contiguous run of credential_index values that
+    map to a single lock user, e.g. with ``max_credentials_per_user=5``:
+
+    ====  ====
+    Slot  User-group
+    ====  ====
+    1-5   group 1 (group_start=1)
+    6-10  group 2 (group_start=6)
+    ...   ...
+    ====  ====
+
+    Returns ``None`` when no other slot in the group is occupied (i.e.
+    this is the first credential of a fresh user — caller should send
+    ``user_index=null`` so the lock auto-allocates).  We probe in slot
+    order to short-circuit on the most common case (group_start was
+    written first), capping the worst-case cost at
+    ``max_credentials_per_user - 1`` ``get_lock_credential_status``
+    calls.
+    """
+    if max_credentials_per_user < 2:
+        return None
+    group_start = (
+        ((slot - 1) // max_credentials_per_user) * max_credentials_per_user + 1
+    )
+    group_end = group_start + max_credentials_per_user - 1
+    for probe_slot in range(group_start, group_end + 1):
+        if probe_slot == slot:
+            continue
+        status = await _get_credential_status(hass, entity_id, probe_slot)
+        if not status or not status.get("credential_exists"):
+            continue
+        user_index = status.get("user_index")
+        if isinstance(user_index, int):
+            return user_index
+    return None
+
+
 async def _get_credential_status(
     hass: HomeAssistant, entity_id: str, slot: int
 ) -> Optional[Dict[str, Any]]:
@@ -763,3 +879,58 @@ async def _get_lock_info(
         )
         return None
     return _extract_entity_response(response, entity_id)
+
+
+def _extract_max_users(info: Dict[str, Any]) -> Optional[int]:
+    """Pick the most-specific PIN-user count from a ``get_lock_info`` payload.
+
+    HA's matter integration may surface ``max_pin_users`` (preferred — that
+    field is the count of PIN-credential users specifically, per
+    ``NumberOfPINUsersSupported``) and/or the broader ``max_users``
+    (``NumberOfTotalUsersSupported``).  Prefer the PIN-specific number when
+    both are present, since users that can't hold PINs aren't useful slots
+    for our purposes.
+    """
+    candidates = (
+        info.get("max_pin_users"),
+        info.get("max_users"),
+    )
+    for candidate in candidates:
+        if isinstance(candidate, int) and candidate > 0:
+            return candidate
+    return None
+
+
+def _extract_max_credentials_per_user(info: Dict[str, Any]) -> Optional[int]:
+    """Pick the per-user credential cap from a ``get_lock_info`` payload.
+
+    Maps to Matter §5.2.4.41 ``NumberOfCredentialsSupportedPerUser``.  The
+    HA Matter integration exposes it as ``max_credentials_per_user``.  We
+    return ``None`` when absent so callers know to fall back to the
+    1-credential-per-user default (which preserves the pre-stacking
+    behaviour).
+    """
+    value = info.get("max_credentials_per_user")
+    if isinstance(value, int) and value > 0:
+        return value
+    return None
+
+
+def _derive_max_slots(
+    max_users: Optional[int],
+    max_credentials_per_user: Optional[int],
+) -> Optional[int]:
+    """Compute total effective PIN slots from the two Matter capacity caps.
+
+    With user-stacking (``max_credentials_per_user >= 2``) the lock can
+    hold ``max_users * max_credentials_per_user`` PINs total — e.g. the
+    Bolt SE's 10 users × 5 credentials = 50 slots.  When the per-user cap
+    isn't advertised (or is 1) we fall back to ``max_users`` directly,
+    matching the pre-stacking behaviour.  Returns ``None`` when we can't
+    determine a positive count.
+    """
+    if max_users is None:
+        return None
+    if max_credentials_per_user is None or max_credentials_per_user <= 1:
+        return max_users
+    return max_users * max_credentials_per_user

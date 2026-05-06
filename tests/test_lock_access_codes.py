@@ -33,6 +33,8 @@ def test_capability_info_defaults():
 
     c = CapabilityInfo(supports_access_codes=True)
     assert c.max_slots is None
+    assert c.max_users is None
+    assert c.max_credentials_per_user is None
     assert c.extra == {}
 
 
@@ -481,6 +483,347 @@ def test_matter_set_code_marks_in_range_unknown_133_as_lock_rejected():
     assert result.extra.get("max_slots") == 10
     assert result.extra.get("slot") == 5
     assert "matter_status=unknown(133)" in (result.error or "")
+
+
+def test_matter_set_code_add_path_with_max_credentials_per_user_one_skips_user_index():
+    """Locks that report ``max_credentials_per_user`` of 1 (or omit the
+    field entirely) get the pre-stacking behaviour: no probe, ``user_index``
+    omitted on the wire, ``user_type`` set so the lock auto-allocates a
+    fresh user.
+    """
+    from services.providers.matter import MatterLockProvider
+
+    hass = _FakeHass()
+    _register_credential_status(hass, exists=False)
+    hass.services.register(
+        "matter",
+        "get_lock_info",
+        {
+            "lock.front_door": {
+                "supports_user_management": True,
+                "supported_credential_types": ["pin"],
+                "max_pin_users": 30,
+                "max_credentials_per_user": 1,
+            }
+        },
+    )
+    hass.services.register(
+        "matter",
+        "set_lock_credential",
+        {
+            "lock.front_door": {
+                "credential_index": 3,
+                "user_index": 3,
+                "next_credential_index": 4,
+            }
+        },
+    )
+
+    provider = MatterLockProvider()
+    _run(provider.set_code(hass, "lock.front_door", 3, "1234"))
+
+    set_call = next(c for c in hass.services.calls if c[1] == "set_lock_credential")
+    set_data = set_call[2]
+    assert "user_index" not in set_data
+    assert set_data.get("user_type") == "unrestricted_user"
+    # No additional credential_status probes beyond the preflight.
+    status_calls = [c for c in hass.services.calls if c[1] == "get_lock_credential_status"]
+    assert len(status_calls) == 1
+
+
+def test_matter_set_code_add_path_in_fresh_user_group_lets_lock_auto_allocate():
+    """Stacked lock (Bolt SE-style: ``max_credentials_per_user=5``).
+    First credential of a fresh user-group means no sibling is occupied,
+    so we fall back to the auto-allocate shape: ``user_index`` omitted,
+    ``user_type`` set.  Probes the other 4 slots in the group looking
+    for an occupant before deciding.
+    """
+    from services.providers.matter import MatterLockProvider
+
+    hass = _FakeHass()
+
+    def _credential_status_stub(data):
+        # All probes return empty — fresh user-group.
+        return {
+            "lock.front_door": {
+                "credential_exists": False,
+                "user_index": None,
+                "next_credential_index": None,
+            }
+        }
+
+    hass.services.register(
+        "matter", "get_lock_credential_status", _credential_status_stub
+    )
+    hass.services.register(
+        "matter",
+        "get_lock_info",
+        {
+            "lock.front_door": {
+                "supports_user_management": True,
+                "supported_credential_types": ["pin"],
+                "max_pin_users": 10,
+                "max_credentials_per_user": 5,
+            }
+        },
+    )
+    hass.services.register(
+        "matter",
+        "set_lock_credential",
+        {
+            "lock.front_door": {
+                "credential_index": 6,
+                "user_index": 2,  # lock auto-allocated
+                "next_credential_index": 7,
+            }
+        },
+    )
+
+    provider = MatterLockProvider()
+    result = _run(provider.set_code(hass, "lock.front_door", 6, "1234"))
+
+    set_call = next(c for c in hass.services.calls if c[1] == "set_lock_credential")
+    set_data = set_call[2]
+    assert "user_index" not in set_data, (
+        "Fresh user-group must omit user_index so the lock auto-allocates"
+    )
+    assert set_data.get("user_type") == "unrestricted_user"
+
+    # Slot 6 + probes for slots 7, 8, 9, 10 = 5 credential_status calls
+    status_slots = [
+        c[2]["credential_index"]
+        for c in hass.services.calls
+        if c[1] == "get_lock_credential_status"
+    ]
+    assert sorted(status_slots) == [6, 7, 8, 9, 10]
+    assert result.verified is True
+    assert result.extra["user_index"] == 2
+
+
+def test_matter_set_code_add_path_in_existing_user_group_attaches_to_user():
+    """Stacked lock, second credential in a user-group: probe finds the
+    sibling slot already occupied with ``user_index=1``, so we send
+    ``user_index=1`` and **omit** ``user_type``/``user_status`` — this
+    is "Add credential to existing user", which the Bolt SE accepts.
+    """
+    from services.providers.matter import MatterLockProvider
+
+    hass = _FakeHass()
+
+    def _credential_status_stub(data):
+        slot = data["credential_index"]
+        if slot == 1:
+            # sibling in the same user-group, already programmed
+            return {
+                "lock.front_door": {
+                    "credential_exists": True,
+                    "user_index": 1,
+                    "next_credential_index": 3,
+                }
+            }
+        return {
+            "lock.front_door": {
+                "credential_exists": False,
+                "user_index": None,
+                "next_credential_index": None,
+            }
+        }
+
+    hass.services.register(
+        "matter", "get_lock_credential_status", _credential_status_stub
+    )
+    hass.services.register(
+        "matter",
+        "get_lock_info",
+        {
+            "lock.front_door": {
+                "supports_user_management": True,
+                "supported_credential_types": ["pin"],
+                "max_pin_users": 10,
+                "max_credentials_per_user": 5,
+            }
+        },
+    )
+    hass.services.register(
+        "matter",
+        "set_lock_credential",
+        {
+            "lock.front_door": {
+                "credential_index": 2,
+                "user_index": 1,  # attached to existing user
+                "next_credential_index": 3,
+            }
+        },
+    )
+
+    provider = MatterLockProvider()
+    result = _run(provider.set_code(hass, "lock.front_door", 2, "1234"))
+
+    set_call = next(c for c in hass.services.calls if c[1] == "set_lock_credential")
+    set_data = set_call[2]
+    assert set_data.get("user_index") == 1, (
+        "Existing user-group: must send the discovered user_index"
+    )
+    assert "user_type" not in set_data, (
+        "Existing user-group: user_type/user_status must be null on the wire"
+    )
+    assert "user_status" not in set_data
+    assert result.verified is True
+    assert result.extra["operation"] == "add"
+    assert result.extra["user_index"] == 1
+
+
+def test_matter_set_code_stacking_short_circuits_on_first_occupied_sibling():
+    """The probe walks slots in order and stops at the first occupied
+    one — important for keeping the per-Add cost bounded by the first
+    occupant rather than always scanning the whole group.
+    """
+    from services.providers.matter import MatterLockProvider
+
+    hass = _FakeHass()
+
+    def _credential_status_stub(data):
+        slot = data["credential_index"]
+        if slot == 1:
+            return {
+                "lock.front_door": {
+                    "credential_exists": True,
+                    "user_index": 7,
+                }
+            }
+        return {
+            "lock.front_door": {"credential_exists": False, "user_index": None}
+        }
+
+    hass.services.register(
+        "matter", "get_lock_credential_status", _credential_status_stub
+    )
+    hass.services.register(
+        "matter",
+        "get_lock_info",
+        {
+            "lock.front_door": {
+                "max_pin_users": 10,
+                "max_credentials_per_user": 5,
+            }
+        },
+    )
+    hass.services.register(
+        "matter",
+        "set_lock_credential",
+        {"lock.front_door": {"credential_index": 5, "user_index": 7}},
+    )
+
+    provider = MatterLockProvider()
+    _run(provider.set_code(hass, "lock.front_door", 5, "1234"))
+
+    # Preflight (slot 5) + probe slot 1 (occupant found, stop).
+    status_slots = [
+        c[2]["credential_index"]
+        for c in hass.services.calls
+        if c[1] == "get_lock_credential_status"
+    ]
+    assert status_slots == [5, 1], (
+        "Probe must short-circuit at the first occupied sibling, not "
+        "scan all 4 remaining slots"
+    )
+
+
+def test_matter_modify_path_unaffected_by_stacking_capabilities():
+    """Modify path always uses the queried user_index regardless of
+    ``max_credentials_per_user`` — the credential already exists, no
+    user-group probing needed.
+    """
+    from services.providers.matter import MatterLockProvider
+
+    hass = _FakeHass()
+    _register_credential_status(hass, exists=True, user_index=42)
+    hass.services.register(
+        "matter",
+        "set_lock_credential",
+        {"lock.front_door": {"credential_index": 7, "user_index": 42}},
+    )
+
+    provider = MatterLockProvider()
+    result = _run(provider.set_code(hass, "lock.front_door", 7, "1234"))
+
+    set_call = next(c for c in hass.services.calls if c[1] == "set_lock_credential")
+    set_data = set_call[2]
+    assert set_data["user_index"] == 42
+    assert "user_type" not in set_data
+
+    # Modify must NOT call get_lock_info (no need for stacking caps).
+    info_calls = [c for c in hass.services.calls if c[1] == "get_lock_info"]
+    assert info_calls == []
+    # And must NOT probe siblings.
+    status_calls = [
+        c for c in hass.services.calls if c[1] == "get_lock_credential_status"
+    ]
+    assert len(status_calls) == 1
+    assert result.extra["operation"] == "modify"
+
+
+def test_matter_get_capabilities_exposes_max_users_and_credentials_per_user():
+    """``get_capabilities`` must surface all three Matter capacity caps so
+    Orion's CapabilityLearner can persist them: ``max_users``,
+    ``max_credentials_per_user``, and the derived ``max_slots`` (their
+    product when stacking is supported).
+    """
+    from services.providers.matter import MatterLockProvider
+
+    hass = _FakeHass()
+    hass.services.register(
+        "matter",
+        "get_lock_info",
+        {
+            "lock.front_door": {
+                "supports_user_management": True,
+                "supported_credential_types": ["pin"],
+                "max_pin_users": 10,
+                "max_users": 10,
+                "max_credentials_per_user": 5,
+            }
+        },
+    )
+
+    provider = MatterLockProvider()
+    caps = _run(provider.get_capabilities(hass, "lock.front_door"))
+
+    assert caps.supports_access_codes is True
+    assert caps.max_users == 10
+    assert caps.max_credentials_per_user == 5
+    assert caps.max_slots == 50, (
+        "max_slots must be max_users * max_credentials_per_user when "
+        "stacking is supported (Bolt SE: 10 users × 5 PINs = 50 slots)"
+    )
+
+
+def test_matter_get_capabilities_falls_back_to_max_users_without_stacking():
+    """Locks that report ``max_credentials_per_user`` <= 1 (or omit it)
+    pre-stacking-style: ``max_slots`` equals ``max_users``.
+    """
+    from services.providers.matter import MatterLockProvider
+
+    hass = _FakeHass()
+    hass.services.register(
+        "matter",
+        "get_lock_info",
+        {
+            "lock.front_door": {
+                "supports_user_management": True,
+                "supported_credential_types": ["pin"],
+                "max_pin_users": 250,
+                "max_credentials_per_user": 1,
+            }
+        },
+    )
+
+    provider = MatterLockProvider()
+    caps = _run(provider.get_capabilities(hass, "lock.front_door"))
+
+    assert caps.max_users == 250
+    assert caps.max_credentials_per_user == 1
+    assert caps.max_slots == 250
 
 
 def test_matter_set_code_does_not_call_set_lock_user():
