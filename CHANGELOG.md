@@ -1,3 +1,10 @@
+## [1.6.0-beta.9](https://github.com/staykey/staykey-ha-plugin/compare/v1.6.0-beta.8...v1.6.0-beta.9) (2026-05-06)
+
+
+### Features
+
+* **staykey:** enhance user status handling for lock credential management ([474f3a9](https://github.com/staykey/staykey-ha-plugin/commit/474f3a9a404cdacdb5565134cdcd3835657c40bd))
+
 ## [1.6.0-beta.8](https://github.com/staykey/staykey-ha-plugin/compare/v1.6.0-beta.7...v1.6.0-beta.8) (2026-05-06)
 
 
