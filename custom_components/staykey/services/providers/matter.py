@@ -131,6 +131,14 @@ _USER_TYPE_DEFAULT = "unrestricted_user"
 # homeassistant/components/matter/lock_helpers.py:SET_CREDENTIAL_STATUS_MAP.
 _DUPLICATE_STATUS = "duplicate"
 
+# Matter IM-level ``Status::InvalidCommand`` rendered through HA's
+# ``unknown(<int>)`` fallback when the status didn't match
+# ``SET_CREDENTIAL_STATUS_MAP``.  In practice this is what real-world
+# locks return when ``credential_index`` is out of range
+# (``credential_index > NumberOfPINCredentialsSupported``) — see the
+# Ultraloq Bolt SE which advertises 10 PIN slots and rejects index 11+.
+_UNKNOWN_INVALID_FIELD_STATUS = "unknown(133)"
+
 
 class MatterLockProvider:
     """LockProvider implementation for HA 2026.4 Matter locks."""
@@ -230,11 +238,16 @@ class MatterLockProvider:
             extra: Dict[str, Any] = {"operation": operation}
             if matter_status is not None:
                 extra["matter_status"] = matter_status
+
+            await _enrich_with_capacity_context(
+                hass, entity_id, slot, matter_status, extra
+            )
+
             result = ProviderResult(
                 slot=slot,
                 method="matter_set_credential",
                 verified=False,
-                error=_format_set_error(matter_status, exc),
+                error=_format_set_error(matter_status, exc, extra),
                 extra=extra,
             )
             _log_set_outcome(
@@ -542,17 +555,84 @@ def _extract_matter_status(exc: BaseException) -> Optional[str]:
     return None
 
 
-def _format_set_error(matter_status: Optional[str], exc: BaseException) -> str:
+def _format_set_error(
+    matter_status: Optional[str],
+    exc: BaseException,
+    extra: Optional[Dict[str, Any]] = None,
+) -> str:
     """Build the ProviderResult.error string with the Matter status if present.
 
     Including the status code in the error string means it propagates
     through Orion's ``DeviceService.classify_action_body/1`` /
     ``ActivityService.format_error_reason/1`` chain into the user-facing
     activity log without any further plumbing.
+
+    When ``extra`` contains a ``reason`` field (e.g. ``slot_out_of_range``)
+    we prepend it to the message — this is how the operator sees
+    "the lock only has 10 PIN slots" instead of the cryptic
+    ``unknown(133)``.
     """
+    reason = extra.get("reason") if extra else None
+    max_slots = extra.get("max_slots") if extra else None
+
+    if reason == "slot_out_of_range" and max_slots is not None:
+        slot = extra.get("slot") if extra else None
+        slot_part = f"slot={slot} " if slot is not None else ""
+        return (
+            "set_lock_credential: slot_out_of_range "
+            f"({slot_part}max_slots={max_slots}, "
+            f"matter_status={matter_status or 'unknown'}): {exc}"
+        )
+
     if matter_status:
         return f"set_lock_credential: matter_status={matter_status}: {exc}"
     return f"set_lock_credential: {exc}"
+
+
+async def _enrich_with_capacity_context(
+    hass: HomeAssistant,
+    entity_id: str,
+    slot: int,
+    matter_status: Optional[str],
+    extra: Dict[str, Any],
+) -> None:
+    """Look up the lock's PIN-slot capacity to classify ``unknown(133)``.
+
+    Real-world locks return Matter IM ``Status::InvalidCommand`` (0x85)
+    via the ``unknown(133)`` fallback when ``credential_index`` exceeds
+    ``NumberOfPINCredentialsSupported``.  HA's
+    :pyfunc:`SET_CREDENTIAL_STATUS_MAP` doesn't translate this to a
+    DlStatus, so we have no per-status hint to act on.  Instead we
+    do a one-shot ``matter.get_lock_info`` lookup and, if the slot is
+    out of range, mark the failure as ``slot_out_of_range`` with the
+    advertised ``max_slots`` so callers (Orion, activity log,
+    operator) see *why* the lock rejected the call rather than
+    ``unknown(133)``.
+
+    The lookup is best-effort — if the lock can't be queried (unstable
+    connection, integration version mismatch) we leave ``extra``
+    untouched and the error falls back to the raw matter_status.
+    """
+    if matter_status != _UNKNOWN_INVALID_FIELD_STATUS:
+        return
+
+    info = await _get_lock_info(hass, entity_id)
+    if not info:
+        return
+
+    max_slots = info.get("max_pin_users") or info.get("max_users")
+    if not isinstance(max_slots, int) or max_slots <= 0:
+        return
+
+    extra["max_slots"] = max_slots
+    extra["slot"] = slot
+    if slot > max_slots:
+        extra["reason"] = "slot_out_of_range"
+    else:
+        # Slot is in range but the lock still rejected with 0x85 —
+        # most likely the user table is full (every PIN user occupied)
+        # or the lock disagrees with its own advertised capacity.
+        extra.setdefault("reason", "lock_rejected")
 
 
 def _format_clear_error(matter_status: Optional[str], exc: BaseException) -> str:
@@ -581,11 +661,13 @@ def _log_set_outcome(
     duration_ms = int((time.monotonic() - started_at) * 1000)
     matter_status = result.extra.get("matter_status") or result.extra.get("status")
     user_index = result.extra.get("user_index")
+    reason = result.extra.get("reason")
+    max_slots = result.extra.get("max_slots")
     log_fn = LOGGER.info if result.verified else LOGGER.error
     log_fn(
         "matter set_code outcome entity_id=%s slot=%d operation=%s "
         "code_length=%d method=%s verified=%s matter_status=%s "
-        "user_index=%s duration_ms=%d error=%s",
+        "user_index=%s reason=%s max_slots=%s duration_ms=%d error=%s",
         entity_id,
         slot,
         operation,
@@ -594,6 +676,8 @@ def _log_set_outcome(
         result.verified,
         matter_status or "-",
         user_index if user_index is not None else "-",
+        reason or "-",
+        max_slots if max_slots is not None else "-",
         duration_ms,
         _format_log_error(result.error, exc),
     )

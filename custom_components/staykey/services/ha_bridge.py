@@ -23,6 +23,7 @@ from ..handlers import (
     device_discovery,
     diagnostics,
     lock,
+    passthrough,
     state,
     switch,
 )
@@ -49,6 +50,7 @@ _ACTION_MAP = {
     "turn_off": switch.handle_turn_off,
     "set_temperature": climate.handle_set_temperature,
     "set_hvac_mode": climate.handle_set_hvac_mode,
+    "ha_service_call": passthrough.handle_ha_service_call,
 }
 
 _PROGRESS_ACTIONS = {"lock", "unlock", "open_cover", "close_cover"}

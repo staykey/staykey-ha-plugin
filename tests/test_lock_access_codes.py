@@ -390,6 +390,96 @@ def test_matter_set_code_surfaces_unknown_im_status_in_extra_and_error():
 
     assert result.verified is False
     assert result.extra.get("matter_status") == "unknown(133)"
+    # Without get_lock_info registered we fall back to raw matter_status
+    assert "matter_status=unknown(133)" in (result.error or "")
+
+
+def test_matter_set_code_classifies_unknown_133_as_slot_out_of_range():
+    """When ``unknown(133)`` comes back on Add and the lock advertises
+    ``max_pin_users < requested slot``, the failure is reclassified as
+    ``slot_out_of_range`` so callers see *why* the lock rejected the
+    call.  This is the empirically-observed Bolt SE failure mode for
+    slot 11 with 10 PIN slots.
+    """
+    from homeassistant.exceptions import HomeAssistantError
+
+    from services.providers.matter import MatterLockProvider
+
+    hass = _FakeHass()
+    _register_credential_status(hass, exists=False)
+    hass.services.register(
+        "matter",
+        "set_lock_credential",
+        HomeAssistantError(
+            "Failed to set credential: lock returned status `unknown(133)`.",
+            translation_placeholders={"status": "unknown(133)"},
+        ),
+    )
+    hass.services.register(
+        "matter",
+        "get_lock_info",
+        {
+            "lock.front_door": {
+                "supports_user_management": True,
+                "supported_credential_types": ["pin"],
+                "max_users": 10,
+                "max_pin_users": 10,
+                "max_credentials_per_user": 1,
+                "min_pin_length": 4,
+                "max_pin_length": 8,
+            }
+        },
+    )
+
+    provider = MatterLockProvider()
+    result = _run(provider.set_code(hass, "lock.front_door", 11, "5678"))
+
+    assert result.verified is False
+    assert result.extra.get("matter_status") == "unknown(133)"
+    assert result.extra.get("reason") == "slot_out_of_range"
+    assert result.extra.get("max_slots") == 10
+    assert result.extra.get("slot") == 11
+    assert "slot_out_of_range" in (result.error or "")
+    assert "max_slots=10" in (result.error or "")
+
+
+def test_matter_set_code_marks_in_range_unknown_133_as_lock_rejected():
+    """When the slot is *within* advertised capacity but the lock still
+    rejects with ``unknown(133)`` (e.g. user table exhausted, lock
+    disagreeing with its own advertised capacity), tag the failure as
+    ``lock_rejected`` rather than ``slot_out_of_range``.
+    """
+    from homeassistant.exceptions import HomeAssistantError
+
+    from services.providers.matter import MatterLockProvider
+
+    hass = _FakeHass()
+    _register_credential_status(hass, exists=False)
+    hass.services.register(
+        "matter",
+        "set_lock_credential",
+        HomeAssistantError(
+            "Failed to set credential: lock returned status `unknown(133)`.",
+            translation_placeholders={"status": "unknown(133)"},
+        ),
+    )
+    hass.services.register(
+        "matter",
+        "get_lock_info",
+        {
+            "lock.front_door": {
+                "max_pin_users": 10,
+            }
+        },
+    )
+
+    provider = MatterLockProvider()
+    result = _run(provider.set_code(hass, "lock.front_door", 5, "5678"))
+
+    assert result.verified is False
+    assert result.extra.get("reason") == "lock_rejected"
+    assert result.extra.get("max_slots") == 10
+    assert result.extra.get("slot") == 5
     assert "matter_status=unknown(133)" in (result.error or "")
 
 
