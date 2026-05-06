@@ -1,3 +1,10 @@
+## [1.6.0-beta.5](https://github.com/staykey/staykey-ha-plugin/compare/v1.6.0-beta.4...v1.6.0-beta.5) (2026-05-06)
+
+
+### Features
+
+* **staykey:** add matter capacity awareness and ha_service_call passthrough ([06b9fcb](https://github.com/staykey/staykey-ha-plugin/commit/06b9fcb7292c35f39b4ebf79dae7f7786fac8da3))
+
 ## [1.6.0-beta.4](https://github.com/staykey/staykey-ha-plugin/compare/v1.6.0-beta.3...v1.6.0-beta.4) (2026-05-06)
 
 
