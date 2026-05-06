@@ -1,3 +1,10 @@
+## [1.6.0-beta.6](https://github.com/staykey/staykey-ha-plugin/compare/v1.6.0-beta.5...v1.6.0-beta.6) (2026-05-06)
+
+
+### Features
+
+* **staykey:** enhance capability info with max users and credentials ([5feee78](https://github.com/staykey/staykey-ha-plugin/commit/5feee78f4b1cb79a06a84258cdb196d913d81bd8))
+
 ## [1.6.0-beta.5](https://github.com/staykey/staykey-ha-plugin/compare/v1.6.0-beta.4...v1.6.0-beta.5) (2026-05-06)
 
 
