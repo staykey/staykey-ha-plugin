@@ -22,6 +22,7 @@ from ..handlers import (
     cover,
     device_discovery,
     diagnostics,
+    event_tap,
     lock,
     passthrough,
     state,
@@ -51,6 +52,7 @@ _ACTION_MAP = {
     "set_temperature": climate.handle_set_temperature,
     "set_hvac_mode": climate.handle_set_hvac_mode,
     "ha_service_call": passthrough.handle_ha_service_call,
+    "tap_events": event_tap.handle_tap_events,
 }
 
 _PROGRESS_ACTIONS = {"lock", "unlock", "open_cover", "close_cover"}
