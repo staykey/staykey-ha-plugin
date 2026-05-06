@@ -19,44 +19,50 @@ slot-based callers:
 * If you pass ``user_index=N``, HA does ``GetUser(N)`` first.  If the
   slot is empty it raises ``UserSlotEmptyError("User slot N is empty")``
   (intended to prevent accidentally Adding when you meant to Modify).
-  If the slot is occupied, HA sends ``SetUser(kModify, ...)`` which
-  some Matter locks (Ultraloq Bolt SE confirmed) reject with
-  ``InvalidCommand (0x85)``.
 * The "auto-allocate empty slot then Add" branch only runs when
   ``user_index=None``, which would force us to give up the
   ``slot == user_index`` invariant.
 
 Per the Matter 1.x spec (DoorLock cluster, SetCredential command), when
 ``operationType=kAdd`` and ``userIndex`` references a non-existent
-user, the lock auto-creates that user with default attributes.  HA's
+user, the lock auto-creates that user with default attributes
+(``kOccupiedEnabled`` / ``kUnrestrictedUser`` / ``kSingle``).  HA's
 ``set_lock_credential`` helper picks Add vs Modify based on the
-**credential** slot's occupancy (no empty-slot guard), so a single
-``set_lock_credential`` call with ``user_index=slot`` covers both the
-"new user + new credential" and "update existing credential" cases for
-arbitrary caller-supplied slot numbers.
+**credential** slot's occupancy, so a single ``set_lock_credential``
+call with ``user_index=slot`` covers both the "new user + new
+credential" and "update existing credential" cases for arbitrary
+caller-supplied slot numbers.
 
-## SetCredential parameter conservatism
+## SetCredential parameter rules (and the 0x85 trap)
 
-Real-world testing on the Ultraloq Bolt SE turned up a fresh-Add
-rejection with HA-rendered status ``unknown(133)``.  HA only maps
-DlStatus values 0x00-0x03 in ``SET_CREDENTIAL_STATUS_MAP``, so anything
-else surfaces as ``unknown(<int>)``; ``133 = 0x85`` is the Matter
-Interaction Model ``INVALID_COMMAND`` general status code, which means
-the lock rejected the command before applying it.  The most likely
-irritants the spec marks as caller-optional but some implementations
-choke on:
+Matter spec ``5.2.4.40`` and connectedhomeip's validity check
+(``DoorLockServer::SetCredential``, chip commit ``16657402aa``) require:
 
-* ``userStatus`` set explicitly on a fresh ``kAdd``.  Spec says the
-  lock should default to ``kOccupiedEnabled`` when null; the Bolt SE
-  appears to reject the explicit value.  We omit it on the wire and
-  let the lock pick its default.
-* ``userType`` left null on a fresh ``kAdd``.  Spec says the lock
-  should default to ``kUnrestrictedUser``; the Bolt SE appears to
-  require it explicitly.  We always send ``unrestricted_user``.
+* ``OperationType=Add`` with ``userIndex`` non-null
+  → ``userStatus`` and ``userType`` **MUST both be null**.
+* ``OperationType=Modify`` with ``userIndex`` non-null
+  → ``userStatus`` and ``userType`` **MUST both be null**.
 
-This keeps the happy path identical for spec-compliant locks (Z-Wave
-locks bridged via Matter, Aqara, Schlage Sense Pro, etc.) while
-unblocking the Bolt SE.
+If either field is non-null the Matter SDK rejects the command with
+``DlStatus::kInvalidField``, which surfaces over the Interaction Model
+as ``Status::InvalidCommand`` (``0x85`` = ``133``).  HA's
+``SET_CREDENTIAL_STATUS_MAP`` only maps the four lock-level DlStatus
+values (success / failure / duplicate / occupied), so 0x85 renders as
+``unknown(133)``.
+
+We therefore send **only** ``credential_type``, ``credential_data``,
+``credential_index``, and ``user_index`` to ``set_lock_credential``.
+The lock auto-creates the user with ``kUnrestrictedUser`` /
+``kOccupiedEnabled`` defaults on Add — exactly what we want.  This
+matches the spec for the entire compliant lock fleet (Aqara U200/U300,
+Schlage Sense Pro, Yale Assure 2, Z-Wave locks bridged via Matter, and
+the Ultraloq Bolt SE / Bolt Fingerprint).
+
+> Earlier revisions of this provider sent ``user_type=unrestricted_user``
+> believing the Bolt SE required it explicitly; that turned out to be
+> the cause of the 0x85 rejection rather than the cure (the SDK
+> validity check fires before the lock vendor logic gets to look at
+> the command).
 
 ## Verification semantics
 
@@ -76,11 +82,21 @@ unblocking the Bolt SE.
 * As a defensive sanity check we fall back to
   ``matter.get_lock_credential_status`` when the set call returns
   without a usable ``credential_index`` for any other reason.
+
+## Wide-event logging
+
+Every ``set_code`` / ``clear_code`` attempt emits a single
+``INFO``-level structured log line on completion with: ``entity_id``,
+``slot``, ``method``, ``verified``, ``matter_status``,
+``duration_ms``, and ``error`` (if any).  The PIN bytes are never
+logged; only ``code_length`` is included so you can correlate length-
+related rejections without leaking secrets.
 """
 
 from __future__ import annotations
 
 import logging
+import time
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from homeassistant.exceptions import HomeAssistantError
@@ -94,11 +110,6 @@ LOGGER = logging.getLogger(__name__)
 
 _MATTER_DOMAIN = "matter"
 _PIN = "pin"
-_USER_TYPE_DEFAULT = "unrestricted_user"
-
-# Kept for backwards compatibility / external readers; no longer sent
-# on set_lock_credential — see module docstring (Bolt SE workaround).
-_USER_STATUS_ENABLED = "occupied_enabled"
 
 # DoorLock SetCredential status codes that are non-fatal for our use
 # case.  Mapped from chip.clusters.DoorLock.Enums.DlStatus by HA in
@@ -124,34 +135,36 @@ class MatterLockProvider:
 
         * If ``credential_index=slot`` is empty, HA sends ``kAdd``; the
           Matter spec auto-creates user ``slot`` with default attributes
+          (``kOccupiedEnabled`` / ``kUnrestrictedUser`` / ``kSingle``)
           and attaches the PIN to it.
         * If the slot already holds a credential, HA sends ``kModify``
           to update the PIN bytes.
         * If the new PIN bytes match what's already there, the lock
           returns ``duplicate`` status — we treat that as success.
 
-        We deliberately omit ``user_status`` and always send
-        ``user_type=unrestricted_user`` — see this module's docstring
-        for the rationale (Bolt SE Add-rejection workaround).
+        We deliberately send neither ``user_status`` nor ``user_type``:
+        per Matter spec ``5.2.4.40`` (and the chip SDK validity check)
+        both fields MUST be null when ``userIndex`` is non-null on Add
+        or Modify.  See module docstring for the full rationale.
 
         Falls back to ``matter.get_lock_credential_status`` only if the
         set call returns without a usable ``credential_index`` and
         didn't raise.
         """
+        started_at = time.monotonic()
         request_payload: Dict[str, Any] = {
             "entity_id": entity_id,
             "credential_type": _PIN,
             "credential_data": str(code),
             "credential_index": slot,
             "user_index": slot,
-            "user_type": _USER_TYPE_DEFAULT,
         }
         LOGGER.debug(
             "matter.set_lock_credential request: entity_id=%s slot=%d "
-            "user_type=%s (user_status omitted intentionally)",
+            "code_length=%d (user_status / user_type omitted per Matter spec)",
             entity_id,
             slot,
-            _USER_TYPE_DEFAULT,
+            len(code),
         )
 
         set_response: Optional[Dict[str, Any]] = None
@@ -165,51 +178,45 @@ class MatterLockProvider:
             )
         except HomeAssistantError as exc:
             if _is_duplicate_credential_error(exc):
-                LOGGER.info(
-                    "matter.set_lock_credential reported duplicate for %s slot %d; "
-                    "treating as verified no-op",
-                    entity_id,
-                    slot,
-                )
-                return ProviderResult(
+                result = ProviderResult(
                     slot=slot,
                     method="matter_set_credential_duplicate",
                     verified=True,
                     extra={"status": _DUPLICATE_STATUS},
                 )
+                _log_set_outcome(entity_id, slot, code, started_at, result)
+                return result
             matter_status = _extract_matter_status(exc)
-            LOGGER.error(
-                "matter.set_lock_credential failed for %s slot %d "
-                "(matter_status=%s): %s",
-                entity_id,
-                slot,
-                matter_status or "<unknown>",
-                exc,
-            )
             extra: Dict[str, Any] = {}
             if matter_status is not None:
                 extra["matter_status"] = matter_status
-            return ProviderResult(
+            result = ProviderResult(
                 slot=slot,
                 method="matter_set_credential",
                 verified=False,
                 error=_format_set_error(matter_status, exc),
                 extra=extra,
             )
-        except Exception as exc:
-            LOGGER.exception(
-                "matter.set_lock_credential failed for %s slot %d", entity_id, slot
-            )
-            return ProviderResult(
+            _log_set_outcome(entity_id, slot, code, started_at, result, exc=exc)
+            return result
+        except Exception as exc:  # pragma: no cover - belt-and-suspenders
+            result = ProviderResult(
                 slot=slot,
                 method="matter_set_credential",
                 verified=False,
                 error=f"set_lock_credential: {exc}",
             )
+            LOGGER.exception(
+                "matter.set_lock_credential raised non-HA exception for %s slot %d",
+                entity_id,
+                slot,
+            )
+            _log_set_outcome(entity_id, slot, code, started_at, result, exc=exc)
+            return result
 
         per_entity = _extract_entity_response(set_response, entity_id)
         if per_entity and per_entity.get("credential_index") is not None:
-            return ProviderResult(
+            result = ProviderResult(
                 slot=slot,
                 method="matter_set_credential",
                 verified=True,
@@ -219,22 +226,28 @@ class MatterLockProvider:
                     "next_credential_index": per_entity.get("next_credential_index"),
                 },
             )
+            _log_set_outcome(entity_id, slot, code, started_at, result)
+            return result
 
         status = await _get_credential_status(hass, entity_id, slot)
         if status and status.get("credential_exists"):
-            return ProviderResult(
+            result = ProviderResult(
                 slot=slot,
                 method="matter_active_read",
                 verified=True,
                 extra={"user_index": status.get("user_index")},
             )
+            _log_set_outcome(entity_id, slot, code, started_at, result)
+            return result
 
-        return ProviderResult(
+        result = ProviderResult(
             slot=slot,
             method="matter_set_credential",
             verified=False,
             error="set_lock_credential returned no credential_index and active read did not confirm",
         )
+        _log_set_outcome(entity_id, slot, code, started_at, result)
+        return result
 
     async def clear_code(
         self,
@@ -248,6 +261,7 @@ class MatterLockProvider:
         and schedules in one operation, so we don't need to call
         ``clear_lock_credential`` separately.
         """
+        started_at = time.monotonic()
         try:
             await hass.services.async_call(
                 _MATTER_DOMAIN,
@@ -255,18 +269,38 @@ class MatterLockProvider:
                 {"entity_id": entity_id, "user_index": slot},
                 blocking=True,
             )
-        except Exception as exc:
-            LOGGER.exception(
-                "matter.clear_lock_user failed for %s slot %d", entity_id, slot
+        except HomeAssistantError as exc:
+            matter_status = _extract_matter_status(exc)
+            extra: Dict[str, Any] = {}
+            if matter_status is not None:
+                extra["matter_status"] = matter_status
+            result = ProviderResult(
+                slot=slot,
+                method="matter_clear_user",
+                verified=False,
+                error=_format_clear_error(matter_status, exc),
+                extra=extra,
             )
-            return ProviderResult(
+            _log_clear_outcome(entity_id, slot, started_at, result, exc=exc)
+            return result
+        except Exception as exc:  # pragma: no cover - belt-and-suspenders
+            result = ProviderResult(
                 slot=slot,
                 method="matter_clear_user",
                 verified=False,
                 error=f"clear_lock_user: {exc}",
             )
+            LOGGER.exception(
+                "matter.clear_lock_user raised non-HA exception for %s slot %d",
+                entity_id,
+                slot,
+            )
+            _log_clear_outcome(entity_id, slot, started_at, result, exc=exc)
+            return result
 
-        return ProviderResult(slot=slot, method="matter_clear_user", verified=True)
+        result = ProviderResult(slot=slot, method="matter_clear_user", verified=True)
+        _log_clear_outcome(entity_id, slot, started_at, result)
+        return result
 
     async def read_codes(
         self,
@@ -377,6 +411,78 @@ def _format_set_error(matter_status: Optional[str], exc: BaseException) -> str:
     if matter_status:
         return f"set_lock_credential: matter_status={matter_status}: {exc}"
     return f"set_lock_credential: {exc}"
+
+
+def _format_clear_error(matter_status: Optional[str], exc: BaseException) -> str:
+    """Mirror of ``_format_set_error`` for the clear path."""
+    if matter_status:
+        return f"clear_lock_user: matter_status={matter_status}: {exc}"
+    return f"clear_lock_user: {exc}"
+
+
+def _log_set_outcome(
+    entity_id: str,
+    slot: int,
+    code: str,
+    started_at: float,
+    result: ProviderResult,
+    *,
+    exc: Optional[BaseException] = None,
+) -> None:
+    """Emit one structured wide-event log line per ``set_code`` attempt.
+
+    PIN bytes are never logged; only the length so length-related
+    rejections (``MinPINCodeLength`` / ``MaxPINCodeLength``) can be
+    correlated against lock attributes without leaking secrets.
+    """
+    duration_ms = int((time.monotonic() - started_at) * 1000)
+    matter_status = result.extra.get("matter_status") or result.extra.get("status")
+    log_fn = LOGGER.info if result.verified else LOGGER.error
+    log_fn(
+        "matter set_code outcome entity_id=%s slot=%d code_length=%d "
+        "method=%s verified=%s matter_status=%s duration_ms=%d error=%s",
+        entity_id,
+        slot,
+        len(code),
+        result.method,
+        result.verified,
+        matter_status or "-",
+        duration_ms,
+        _format_log_error(result.error, exc),
+    )
+
+
+def _log_clear_outcome(
+    entity_id: str,
+    slot: int,
+    started_at: float,
+    result: ProviderResult,
+    *,
+    exc: Optional[BaseException] = None,
+) -> None:
+    """Emit one structured wide-event log line per ``clear_code`` attempt."""
+    duration_ms = int((time.monotonic() - started_at) * 1000)
+    matter_status = result.extra.get("matter_status")
+    log_fn = LOGGER.info if result.verified else LOGGER.error
+    log_fn(
+        "matter clear_code outcome entity_id=%s slot=%d "
+        "method=%s verified=%s matter_status=%s duration_ms=%d error=%s",
+        entity_id,
+        slot,
+        result.method,
+        result.verified,
+        matter_status or "-",
+        duration_ms,
+        _format_log_error(result.error, exc),
+    )
+
+
+def _format_log_error(error: Optional[str], exc: Optional[BaseException]) -> str:
+    if error:
+        return error
+    if exc is not None:
+        return f"{type(exc).__name__}: {exc}"
+    return "-"
 
 
 async def _get_credential_status(

@@ -220,10 +220,15 @@ def test_matter_set_code_calls_only_set_lock_credential_on_happy_path():
     assert result.extra["credential_index"] == 7
 
 
-def test_matter_set_code_omits_user_status_and_sends_user_type():
-    """Bolt SE Add-rejection workaround: ``user_status`` must not be
-    sent on the wire and ``user_type`` must be sent explicitly as
-    ``unrestricted_user``.  See providers/matter.py moduledoc.
+def test_matter_set_code_omits_user_status_and_user_type():
+    """Per Matter spec 5.2.4.40 / chip SDK validity check, both
+    ``userStatus`` and ``userType`` MUST be null when ``userIndex`` is
+    non-null on Add or Modify.  Sending either causes the SDK to reject
+    with ``DlStatus::kInvalidField`` → IM ``InvalidCommand`` (0x85),
+    which HA renders as ``unknown(133)``.
+
+    This test guards against any regression that re-introduces either
+    field; see providers/matter.py moduledoc for the full background.
     """
     from services.providers.matter import MatterLockProvider
 
@@ -245,10 +250,14 @@ def test_matter_set_code_omits_user_status_and_sends_user_type():
 
     set_call_data = hass.services.calls[0][2]
     assert "user_status" not in set_call_data, (
-        "user_status must be omitted to avoid Bolt SE Add-rejection"
+        "user_status must be omitted; the lock auto-defaults to "
+        "kOccupiedEnabled per Matter spec"
     )
-    assert set_call_data.get("user_type") == "unrestricted_user", (
-        "user_type must be set explicitly to avoid Bolt SE Add-rejection"
+    assert "user_type" not in set_call_data, (
+        "user_type must be omitted; the lock auto-defaults to "
+        "kUnrestrictedUser per Matter spec.  Setting either field with "
+        "userIndex non-null causes the chip SDK to return "
+        "DlStatus::kInvalidField (IM 0x85 = 133)."
     )
 
 
