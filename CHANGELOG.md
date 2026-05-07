@@ -1,3 +1,10 @@
+## [1.6.0-beta.10](https://github.com/staykey/staykey-ha-plugin/compare/v1.6.0-beta.9...v1.6.0-beta.10) (2026-05-07)
+
+
+### Bug Fixes
+
+* **staykey:** omit user_status from Matter SetCredential add payload ([397f13e](https://github.com/staykey/staykey-ha-plugin/commit/397f13e67a99160f87348cffcdfe97f36e8c3400))
+
 ## [1.6.0-beta.9](https://github.com/staykey/staykey-ha-plugin/compare/v1.6.0-beta.8...v1.6.0-beta.9) (2026-05-06)
 
 
