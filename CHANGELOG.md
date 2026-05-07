@@ -1,3 +1,10 @@
+## [1.6.0](https://github.com/staykey/staykey-ha-plugin/compare/v1.5.0...v1.6.0) (2026-05-07)
+
+
+### Features
+
+* **staykey:** add Matter lock support and protocol-agnostic lock provider ([5d26f9e](https://github.com/staykey/staykey-ha-plugin/commit/5d26f9ea6045f1de692786beff017aace71e4a47))
+
 ## [1.6.0-beta.13](https://github.com/staykey/staykey-ha-plugin/compare/v1.6.0-beta.12...v1.6.0-beta.13) (2026-05-07)
 
 
