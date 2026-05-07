@@ -1,29 +1,25 @@
-"""Matter LockProvider (HA 2026.4 Matter Lock Manager).
+"""Matter LockProvider (Home Assistant 2026.4 Matter Lock Manager).
 
-Built on the new ``matter.set_lock_credential`` /
-``matter.clear_lock_user`` / ``matter.get_lock_credential_status``
-service actions added in Home Assistant 2026.4.
+Uses ``matter.set_lock_credential``, ``matter.clear_lock_user``,
+``matter.get_lock_credential_status``, and related services from
+Home Assistant 2026.4+.
 
-The Staykey ``slot`` is used as ``credential_index`` only.  Earlier
-versions of this provider tried to use ``slot`` as ``user_index`` too,
-which simplified bookkeeping but assumed every Matter lock implements
-the spec's "auto-create-user-at-the-given-userIndex" path.  Real-world
-testing showed that the **Ultraloq Bolt SE** (and likely other
-vendor-SDK locks) only auto-creates a user when ``userIndex`` is
-**null**, not when ``userIndex`` is non-null and refers to an empty
-user slot — even though the Matter spec describes both paths.
+## Credential index vs user index
 
-We therefore mirror the flow the official HA Matter Lock Manager UI
-(`frontend#28672 <https://github.com/home-assistant/frontend/pull/28672>`_)
-uses, which is known to work on Aqara U200/U300, Yale Assure 2,
-Schlage Sense Pro, Z-Wave-via-Matter bridges, and the Bolt SE.
+The integration maps each caller ``slot`` to Matter ``credential_index``.
+The lock may choose ``user_index`` on Add; we read it from HA responses.
+Older approaches that forced ``slot == user_index`` fail on several vendor
+implementations that only auto-create users when ``user_index`` is omitted
+(null on the wire), even though the Matter spec also describes an alternate
+path.
 
-## Two-branch SetCredential by slot occupancy
+Payloads follow the same Add/Modify split as Home Assistant's Matter Lock
+Manager UI, which is broadly compatible across Matter locks and bridges.
 
-We pre-flight the slot with ``matter.get_lock_credential_status`` to
-learn (a) whether HA will pick ``kAdd`` or ``kModify`` and (b) the
-current user_index for Modify.  Then we send a single
-``matter.set_lock_credential`` shaped for that branch:
+## Add vs Modify
+
+We preflight with ``get_lock_credential_status`` and send one
+``set_lock_credential``:
 
 ==================================  ================  ==========  =====================  ===========
 Slot state                          operation         user_index  user_type              user_status
@@ -32,102 +28,38 @@ Empty slot                          HA picks kAdd     *null*      ``unrestricted
 Occupied slot                       HA picks kModify  existing N  *null*                 *null*
 ==================================  ================  ==========  =====================  ===========
 
-We considered user-stacking (multiple PIN credentials sharing one
-``user_index``) per Matter §5.2.4.41 — the Bolt SE advertises 5 PINs
-per user, which would have notionally given us 50 effective slots.
-Empirically the Bolt SE caps total PIN credentials globally at
-``max_pin_users`` regardless of distribution, so stacking provided no
-capacity benefit; HA's matter integration also doesn't currently
-surface ``user_index`` on ``LockOperation`` events, so the
-recipient-resolution argument disappears too.  We removed the
-sibling-slot probe; if a future use case revives stacking, the probe
-logic is in this module's git history (commits ``b2f1c…`` and
-``397f13e``).
+We do not stack multiple PIN credentials on one ``user_index``: many locks
+cap total PIN credentials at ``max_pin_users``, and the integration does
+not yet expose rich enough lock-bus events for multi-credential user rows
+to be auditable.
 
-Both shapes are spec-compliant per Matter 1.x §5.2.4.40 and the
-connectedhomeip validity check (``DoorLockServer::SetCredential``,
-chip ``16657402aa``):
+On Add we send ``user_type`` and omit ``user_status`` (null on wire). Some
+vendor firmware misbehaves if ``user_status`` is set on Add (SetCredential
+may succeed while the keypad rejects every PIN).
 
-* **Add + userIndex null** → ``userType`` describes the user the lock
-  will auto-create; ``userStatus`` is omitted (null on the wire).
-  This matches the captured payload of HA's Matter Lock Manager UI
-  byte-for-byte, which is the only payload empirically confirmed to
-  produce a working PIN on the Ultraloq Bolt SE.  An earlier revision
-  (plugin v1.6.0-beta.9) sent ``user_status = occupied_enabled`` here
-  on the theory that an explicit-enable would help, but the Bolt SE
-  reacted by writing the credential and leaving the user in a state
-  where the keypad refused every PIN, even though SetCredential
-  returned ``kSuccess``.  Reverting to "user_status omitted" restored
-  parity with the UI flow.
-* **Modify + userIndex non-null** → ``userStatus`` and ``userType``
-  MUST both be null; the lock keeps the existing user attributes and
-  only swaps the PIN bytes.
+If the lock reports ``duplicate``, the PIN is already present; we treat that
+as success so automated retries converge.
 
-The combination "Add + userIndex non-null" (which earlier revisions
-of this provider used) is *spec-legal* but only viable on locks that
-implement the auto-create-on-known-index branch.  The Bolt SE doesn't,
-and rejects with ``DlStatus::kInvalidField`` → IM
-``Status::InvalidCommand`` (``0x85`` = ``133``); HA renders that as
-``unknown(133)`` because ``SET_CREDENTIAL_STATUS_MAP`` only knows the
-four lock-level DlStatus values.  This module's prior commit history
-(``b46fbe6``, the spec-compliant rollback that followed) walks through
-both dead-end shapes for posterity.
+## Clear path
 
-## Why we don't call ``matter.set_lock_user`` proactively
+We look up ``user_index`` when available and prefer ``clear_lock_user`` so
+the user and attached credentials are removed atomically per the Matter
+spec.
 
-We considered a two-step "create user, then attach credential" flow
-(``set_lock_user`` first, then ``set_lock_credential``) but the
-SetCredential auto-create path is simpler, atomic on the lock side,
-and matches the HA UI byte-for-byte.  ``set_lock_user`` is still used
-indirectly via ``clear_lock_user`` on the clear path because that's
-the one Matter command that wipes a user and all their credentials in
-one shot.
+## Concurrency and logging
 
-## Slot ↔ user_index mapping (relinquished)
-
-Earlier docstrings claimed ``slot == user_index`` to avoid a
-mapping-table headache.  That invariant is **no longer maintained**:
-the lock allocates ``user_index`` on Add, we read it back from the
-SetCredential response, and we surface it in ``ProviderResult.extra``
-for callers that want to remember it.  Clearing a slot doesn't need
-the cached value — ``clear_code`` just re-queries
-``get_lock_credential_status(slot)`` to find the user.
-
-## Verification semantics
-
-* ``matter.set_lock_credential`` returns its result synchronously
-  (``credential_index``, ``user_index``, ``next_credential_index``) when
-  called with ``return_response=True``.  A successful response means
-  the Matter server programmed the credential on the lock.
-* If the call raises with a HA-translated status of ``duplicate``, the
-  same credential bytes are already programmed in that slot — treated
-  as a verified no-op (important for Oban retries that succeeded
-  silently the first time).
-* On any other rejection we extract the structured Matter status from
-  the exception's ``translation_placeholders`` and surface it both in
-  logs and in ``ProviderResult.extra["matter_status"]`` /
-  ``ProviderResult.error`` so Orion's activity log shows the actual
-  Matter status code rather than just "set_lock_credential failed".
-* As a defensive sanity check we fall back to
-  ``matter.get_lock_credential_status`` when the set call returns
-  without a usable ``credential_index`` for any other reason.
-
-## Wide-event logging
-
-Every ``set_code`` / ``clear_code`` attempt emits a single
-``INFO``-level structured log line on completion with: ``entity_id``,
-``slot``, ``operation`` (``add`` or ``modify``), ``method``,
-``verified``, ``matter_status``, ``user_index`` (if known),
-``duration_ms``, and ``error`` (if any).  The PIN bytes are never
-logged; only ``code_length`` is included so you can correlate length-
-related rejections without leaking secrets.
+``set_code`` / ``clear_code`` for the same ``entity_id`` are serialized with
+an asyncio lock to prevent read/modify races. Structured logs record
+``code_length`` but never the PIN itself.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from weakref import WeakValueDictionary
 
 from homeassistant.exceptions import HomeAssistantError
 
@@ -138,6 +70,24 @@ if TYPE_CHECKING:
 
 LOGGER = logging.getLogger(__name__)
 
+# Per-entity asyncio.Lock to serialize Matter set/clear/read operations
+# on a single physical lock. Without this, two operations on the same
+# entity (e.g. overlapping set and clear jobs) can race their preflight
+# race their preflight reads against the other's writes (TOCTOU): the
+# preflight sees the slot as empty, takes the Add path, but by the time
+# the SetCredential lands the other op has already added a credential
+# at that index. Using a WeakValueDictionary so locks are GC'd when
+# entities are removed.
+_ENTITY_LOCKS: "WeakValueDictionary[str, asyncio.Lock]" = WeakValueDictionary()
+
+
+def _get_entity_lock(entity_id: str) -> asyncio.Lock:
+    lock = _ENTITY_LOCKS.get(entity_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _ENTITY_LOCKS[entity_id] = lock
+    return lock
+
 _MATTER_DOMAIN = "matter"
 _PIN = "pin"
 
@@ -145,14 +95,10 @@ _PIN = "pin"
 # path so the lock auto-creates a non-restricted (always-valid) user.
 #
 # We deliberately do **not** send ``user_status`` alongside it: the HA
-# Matter Lock Manager UI omits it (verified empirically against the
-# Ultraloq Bolt SE via tap_events capture), and the matter-server SDK
-# defaults ``userStatus`` to its own working value when the field is
-# null on the wire.  Sending ``user_status=occupied_enabled`` —
-# attempted in plugin v1.6.0-beta.9 — caused the Bolt SE to write the
-# credential but leave the user in a state where the keypad refused
-# every PIN, even though SetCredential reported ``kSuccess``.  Removing
-# user_status restored parity with the UI flow.
+# Matter Lock Manager UI omits it on Add, and sending ``occupied_enabled``
+# here has been observed on some firmware to leave the credential written
+# but the keypad rejecting PINs even when SetCredential returns success.
+# Omitting ``user_status`` matches that UI behavior.
 _USER_TYPE_DEFAULT = "unrestricted_user"
 
 # DoorLock SetCredential status codes that are non-fatal for our use
@@ -163,9 +109,8 @@ _DUPLICATE_STATUS = "duplicate"
 # Matter IM-level ``Status::InvalidCommand`` rendered through HA's
 # ``unknown(<int>)`` fallback when the status didn't match
 # ``SET_CREDENTIAL_STATUS_MAP``.  In practice this is what real-world
-# locks return when ``credential_index`` is out of range
-# (``credential_index > NumberOfPINCredentialsSupported``) — see the
-# Ultraloq Bolt SE which advertises 10 PIN slots and rejects index 11+.
+# locks return when ``credential_index`` exceeds hardware limits — e.g.
+# requesting slot 11 on a lock that only allows 10 PIN credentials.
 _UNKNOWN_INVALID_FIELD_STATUS = "unknown(133)"
 
 
@@ -175,6 +120,16 @@ class MatterLockProvider:
     name: str = "matter"
 
     async def set_code(
+        self,
+        hass: HomeAssistant,
+        entity_id: str,
+        slot: int,
+        code: str,
+    ) -> ProviderResult:
+        async with _get_entity_lock(entity_id):
+            return await self._set_code_locked(hass, entity_id, slot, code)
+
+    async def _set_code_locked(
         self,
         hass: HomeAssistant,
         entity_id: str,
@@ -198,35 +153,46 @@ class MatterLockProvider:
           ``user_type=unrestricted_user``, ``user_status=null``.  HA
           dispatches ``SetCredential(kAdd)``; the lock auto-allocates a
           fresh user with the supplied user_type and attaches the PIN
-          at our ``credential_index``.  Each Staykey-managed credential
-          gets its own auto-allocated user — we don't try to stack
-          multiple credentials onto a single ``user_index``.
+          at our ``credential_index``.  Each caller slot gets its own
+          auto-allocated user — we don't stack multiple credentials onto a
+          single ``user_index``.
 
-        We considered user-stacking (multiple PIN credentials sharing
-        one ``user_index``) per Matter §5.2.4.41 — on the Ultraloq
-        Bolt SE that allows up to 5 PINs per user.  In practice it
-        provided no capacity benefit (the Bolt SE caps total PIN
-        credentials globally at ``max_pin_users``, regardless of
-        distribution) and HA's matter integration doesn't currently
-        surface ``user_index`` on ``LockOperation`` events anyway, so
-        the recipient-resolution argument disappears.  Keeping each
-        credential under its own user keeps the data model simple and
-        unambiguous; if a future use case revives stacking, the probe
-        logic is in this module's git history (commits ``b2f1c…`` and
-        ``397f13e``).
+        Stacking multiple PINs on one ``user_index`` (per Matter §5.2.4.41)
+        often yields no real capacity gain because firmware frequently caps
+        total PIN credentials at ``max_pin_users``. Keeping one credential
+        per user keeps behavior predictable.
 
         If the lock returns ``duplicate`` (same PIN bytes already
-        programmed), we treat that as a verified no-op so Oban retries
-        of an op that succeeded silently the first time still
+        programmed), we treat that as a verified no-op so automated retries
         converge.
 
         See the module docstring for why we never send a non-null
-        userIndex pointing at an *empty* user slot (Bolt SE rejects
-        that combination despite the spec describing it).
+        userIndex pointing at an *empty* user slot on locks that only
+        accept Add with a null ``user_index``.
         """
         started_at = time.monotonic()
 
-        existing = await _get_credential_status(hass, entity_id, slot)
+        try:
+            existing = await _get_credential_status(hass, entity_id, slot)
+        except PreflightUnavailable as exc:
+            # Fail safe: we don't know if the slot is occupied. Adding a
+            # PIN to an occupied slot can produce undefined behaviour on
+            # some firmware (silent overwrite, error, or worse). Bail
+            # Return a definitive failure to the caller (upstream marks
+            # this class of error as non-retriable).
+            result = ProviderResult(
+                slot=slot,
+                method="matter_set_credential",
+                verified=False,
+                error=f"set_lock_credential: preflight_unavailable: {exc.original or exc}",
+                extra={
+                    "operation": "preflight",
+                    "preflight_error": str(exc.original or exc),
+                },
+            )
+            _log_set_outcome(entity_id, slot, code, "preflight", started_at, result, exc=exc.original)
+            return result
+
         is_modify = bool(existing and existing.get("credential_exists"))
         operation = "modify" if is_modify else "add"
 
@@ -244,10 +210,10 @@ class MatterLockProvider:
             # when userIndex is non-null (chip SDK validity check).
         else:
             # No user_index → null on the wire → lock auto-allocates a
-            # fresh user.  ``user_type`` describes the auto-created
-            # user; ``user_status`` is intentionally omitted (see the
-            # ``_USER_TYPE_DEFAULT`` constant for why — sending it
-            # actively breaks the Bolt SE).
+            # fresh user. ``user_type`` describes the auto-created user.
+            # ``user_status`` is intentionally omitted — see
+            # ``_USER_TYPE_DEFAULT`` (some locks reject keypad entry if
+            # ``user_status`` is set on Add).
             request_payload["user_type"] = _USER_TYPE_DEFAULT
         LOGGER.debug(
             "matter.set_lock_credential request: entity_id=%s slot=%d "
@@ -335,7 +301,12 @@ class MatterLockProvider:
             _log_set_outcome(entity_id, slot, code, operation, started_at, result)
             return result
 
-        status = await _get_credential_status(hass, entity_id, slot)
+        try:
+            status = await _get_credential_status(hass, entity_id, slot)
+        except PreflightUnavailable:
+            # Fall through to "no confirmation" failure path below.
+            status = None
+
         if status and status.get("credential_exists"):
             result = ProviderResult(
                 slot=slot,
@@ -365,6 +336,15 @@ class MatterLockProvider:
         entity_id: str,
         slot: int,
     ) -> ProviderResult:
+        async with _get_entity_lock(entity_id):
+            return await self._clear_code_locked(hass, entity_id, slot)
+
+    async def _clear_code_locked(
+        self,
+        hass: HomeAssistant,
+        entity_id: str,
+        slot: int,
+    ) -> ProviderResult:
         """Clear the credential at *slot*.
 
         Looks up the associated ``user_index`` via
@@ -376,7 +356,7 @@ class MatterLockProvider:
         Edge cases:
 
         * If the credential slot is already empty we return a verified
-          no-op — important for Oban retries.
+          no-op — important when automation retries an already-applied clear.
         * If the slot has a credential but no associated ``user_index``
           (orphaned credential, shouldn't happen but defensively
           handled), we fall back to ``matter.clear_lock_credential``
@@ -384,13 +364,27 @@ class MatterLockProvider:
         """
         started_at = time.monotonic()
 
-        existing = await _get_credential_status(hass, entity_id, slot)
-        if existing is None:
+        try:
+            existing = await _get_credential_status(hass, entity_id, slot)
+        except PreflightUnavailable as exc:
             result = ProviderResult(
                 slot=slot,
                 method="matter_clear_user",
                 verified=False,
-                error="clear_lock_user: get_lock_credential_status returned no data",
+                error=f"clear_lock_user: preflight_unavailable: {exc.original or exc}",
+                extra={"preflight_error": str(exc.original or exc)},
+            )
+            _log_clear_outcome(entity_id, slot, started_at, result, exc=exc.original)
+            return result
+
+        if existing is None:
+            # HA responded but didn't include data for this entity/slot.
+            # Treat as "no credential to clear" (verified no-op) so retries
+            # of an already-satisfied request still converge.
+            result = ProviderResult(
+                slot=slot,
+                method="matter_clear_already_empty",
+                verified=True,
             )
             _log_clear_outcome(entity_id, slot, started_at, result)
             return result
@@ -519,7 +513,12 @@ class MatterLockProvider:
         """
         results: List[SlotInfo] = []
         for slot in range(1, max_slots + 1):
-            status = await _get_credential_status(hass, entity_id, slot)
+            try:
+                status = await _get_credential_status(hass, entity_id, slot)
+            except PreflightUnavailable:
+                # Skip the slot rather than misreporting it as empty.
+                # Caller can re-issue the read later.
+                continue
             if status is None:
                 continue
             results.append(
@@ -608,10 +607,8 @@ def _format_set_error(
 ) -> str:
     """Build the ProviderResult.error string with the Matter status if present.
 
-    Including the status code in the error string means it propagates
-    through Orion's ``DeviceService.classify_action_body/1`` /
-    ``ActivityService.format_error_reason/1`` chain into the user-facing
-    activity log without any further plumbing.
+    Including the status code gives operators a clearer message in Staykey
+    dashboards and logs without extra parsing steps.
 
     When ``extra`` contains a ``reason`` field (e.g. ``slot_out_of_range``)
     we prepend it to the message — this is how the operator sees
@@ -651,9 +648,8 @@ async def _enrich_with_capacity_context(
     DlStatus, so we have no per-status hint to act on.  Instead we
     do a one-shot ``matter.get_lock_info`` lookup and, if the slot is
     out of range, mark the failure as ``slot_out_of_range`` with the
-    advertised ``max_slots`` so callers (Orion, activity log,
-    operator) see *why* the lock rejected the call rather than
-    ``unknown(133)``.
+    advertised ``max_slots`` so operators and UIs see *why* the lock
+    rejected the call rather than only ``unknown(133)``.
 
     The lookup is best-effort — if the lock can't be queried (unstable
     connection, integration version mismatch) we leave ``extra``
@@ -765,9 +761,33 @@ def _format_log_error(error: Optional[str], exc: Optional[BaseException]) -> str
     return "-"
 
 
+class PreflightUnavailable(Exception):
+    """Raised when a Matter preflight call (status / lock info) fails.
+
+    Distinguishes "we don't know the slot state" from "we know the slot is
+    empty". Callers that branch on slot occupancy (e.g.
+    ``MatterLockProvider.set_code``'s Add-vs-Modify decision) must fail
+    safe rather than treat unknown as empty.
+    """
+
+    def __init__(self, message: str, *, original: Optional[BaseException] = None) -> None:
+        super().__init__(message)
+        self.original = original
+
+
 async def _get_credential_status(
     hass: HomeAssistant, entity_id: str, slot: int
 ) -> Optional[Dict[str, Any]]:
+    """Look up the credential status for *slot*.
+
+    Returns the per-entity status dict on success. May return ``None``
+    when HA responded but didn't include an entity-keyed payload (treat
+    as "definitely empty / no data" — distinct from the unknown case).
+
+    Raises :class:`PreflightUnavailable` when the underlying HA service
+    call fails, so callers can fail safe rather than guess slot
+    occupancy from an error.
+    """
     try:
         response = await hass.services.async_call(
             _MATTER_DOMAIN,
@@ -780,14 +800,18 @@ async def _get_credential_status(
             blocking=True,
             return_response=True,
         )
-    except Exception:
-        LOGGER.debug(
-            "matter.get_lock_credential_status failed for %s slot %d",
+    except Exception as exc:
+        LOGGER.warning(
+            "matter.get_lock_credential_status failed for %s slot %d: %s",
             entity_id,
             slot,
+            exc,
             exc_info=True,
         )
-        return None
+        raise PreflightUnavailable(
+            f"get_lock_credential_status failed for {entity_id} slot {slot}",
+            original=exc,
+        ) from exc
 
     return _extract_entity_response(response, entity_id)
 
@@ -804,7 +828,7 @@ async def _get_lock_info(
             return_response=True,
         )
     except Exception:
-        LOGGER.debug(
+        LOGGER.warning(
             "matter.get_lock_info failed for %s", entity_id, exc_info=True
         )
         return None
@@ -823,13 +847,11 @@ def _extract_max_slots(info: Dict[str, Any]) -> Optional[int]:
 
     The Matter spec (§5.2.4.41) implies a lock that also advertises
     ``NumberOfCredentialsSupportedPerUser = C`` can hold ``U × C`` PIN
-    credentials.  In practice firmware like the Ultraloq Bolt SE enforces
-    a tighter global cap equal to ``U`` even when ``C > 1`` (empirically
-    rejects credential_index 11+ once 10 PIN credentials are programmed,
-    regardless of distribution across users).  We therefore size
-    ``max_slots = max_users`` only; locks that genuinely support the
-    full ``U × C`` cap can override via
-    ``SupportedDevice.default_settings`` in Orion.
+    credentials. In practice, vendor firmware enforces
+    a tighter global cap equal to the user count even when the spec would
+    allow more PIN rows per user. We therefore size ``max_slots`` from
+    ``max_pin_users`` / ``max_users`` conservatively; hosts with unusual
+    hardware can correct capacity in the Staykey device catalog if needed.
     """
     candidates = (
         info.get("max_pin_users"),

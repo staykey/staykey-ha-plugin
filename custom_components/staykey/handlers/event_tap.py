@@ -1,32 +1,24 @@
-"""Bus event tap for ad-hoc HA event observation.
+"""Bus event tap for ad-hoc Home Assistant event observation.
 
 Subscribes to ``hass.bus`` for a bounded duration and returns whatever
-fired during that window.  Useful for empirical investigation of
-vendor-specific Matter / Z-Wave behavior — e.g. "what does HA emit when
-the Bolt SE is unlocked with a PIN?" — where service-call passthrough
-isn't enough because lock operations surface as bus events
-(``state_changed``, integration-specific ``matter_event`` /
-``zwave_js_event``, etc.) rather than service responses.
+fired during that window. Useful when investigating integration behavior —
+e.g. which bus events fire for a keypad unlock — where a service call
+alone does not surface asynchronous notifications.
 
 ## Why this exists
 
-The ``ha_service_call`` passthrough is great for "fire X and tell me
-the response", but events fired *asynchronously* by integrations
-(state changes, Matter cluster events, Z-Wave notifications) never
-flow back through a service-call return value — they go on the
-``hass.bus``.  Subscribing from inside HA is the only way to observe
-them; doing it from outside HA via the gateway requires this kind of
-short-lived, bounded tap.
+Service-call responses carry only direct results; many integrations emit
+follow-on events (``state_changed``, integration-specific notifications).
+Subscribing from inside this component is the reliable way to capture
+those when troubleshooting from a gateway-connected client.
 
-We deliberately keep this tightly scoped (max duration, max event
-count) so a runaway caller can't park a long-lived listener through
-the gateway.
+Windows are capped (duration + max event count) so a misbehaving caller
+cannot leave listeners attached indefinitely.
 
 ## Security model
 
-Same as :mod:`.passthrough` — gated by gateway WebSocket auth, not
-exposed via REST webhooks, and only as privileged as the HA process
-Staykey runs inside.
+Same as :mod:`..passthrough` — gateway-authenticated channel only, not on
+the public REST webhook surface, privilege bounded by the HA integration.
 """
 
 from __future__ import annotations
@@ -58,7 +50,7 @@ async def handle_tap_events(
 
         {
           "event_types": ["state_changed", "matter_event"],  # optional
-          "entity_id": "lock.ultraloq_bolt",                  # optional
+          "entity_id": "lock.front_door",                   # optional filter
           "duration_seconds": 10,                              # default 10, max 60
           "max_events": 200                                     # default 200, max 500
         }
@@ -209,8 +201,7 @@ def _serialize_event(event: Any) -> Dict[str, Any]:
 
     HA's ``Event`` carries ``data`` (a dict, often containing rich
     objects like ``State``, ``datetime``, etc.) and metadata.  We
-    serialize everything into JSON-friendly primitives so the gateway
-    transport doesn't choke.
+    serialize everything into JSON-friendly primitives for transport.
     """
     payload: Dict[str, Any] = {
         "event_type": getattr(event, "event_type", None),

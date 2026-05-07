@@ -8,8 +8,8 @@ it asks a :class:`LockProvider` selected from the device's protocol.
 
 Concrete providers live under ``services/providers/`` and all return the
 same :class:`ProviderResult` / :class:`SlotInfo` / :class:`CapabilityInfo`
-shapes so Orion's Elixir per-protocol modules can stay in lockstep with
-the plugin path.
+shapes so the cloud/API side can treat gateway and direct HA responses
+the same way without format forks.
 """
 
 from __future__ import annotations
@@ -33,8 +33,8 @@ if TYPE_CHECKING:
 class ProviderResult:
     """Outcome of a set_code / clear_code operation.
 
-    Fields mirror what Orion's per-protocol modules return so the same
-    JSON makes it back to the worker regardless of which HA path was used.
+    Fields align with the JSON contract expected by Staykey's API layer
+    for lock credential operations.
     """
 
     slot: int

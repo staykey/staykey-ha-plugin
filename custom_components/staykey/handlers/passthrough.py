@@ -1,32 +1,25 @@
-"""Generic HA service-call passthrough.
+"""Generic Home Assistant service-call passthrough.
 
-Lets the gateway (and therefore Orion or a curl-to-``/internal/command``)
-fire arbitrary Home Assistant service calls without going through one of
-the typed Staykey handlers in :mod:`..handlers.lock` /
-:mod:`..handlers.switch` / etc.
+Allows authenticated gateway clients to invoke ``hass.services.async_call``
+without going through the typed handlers in :mod:`..handlers.lock`,
+:mod:`..handlers.switch`, etc.
 
 ## Why this exists
 
-When debugging vendor-specific Matter / Z-Wave quirks (e.g. the Ultraloq
-Bolt SE rejecting ``matter.set_lock_credential`` with an unmapped 0x85
-status), it's enormously faster to iterate against the real lock by
-poking different payload shapes from the dev machine than it is to
-ship a plugin release and wait for HACS / restart.
-
-The passthrough also makes the ``/internal/command`` interface useful
-for Orion-side integration tests against a real HA — ``call_service``
-becomes the primitive, and Staykey-typed actions become higher-level
-conveniences on top of it.
+Useful when debugging vendor-specific Matter or Z-Wave behavior: iterate
+payloads against a real device from a dev machine without shipping a new
+plugin build. Also supports automated tests that need a thin ``call_service``
+primitive.
 
 ## Security model
 
-* The action is gated by the gateway WebSocket auth (``GATEWAY_TOKEN``)
-  that's already required to reach this handler at all.
-* It is NOT exposed via the Staykey REST webhook surface — it's
-  reachable only over the agent gateway connection.
-* It mirrors the privileges of the HA process Staykey is running
-  inside, so it's no more dangerous than HA's own Developer Tools
-  service caller.
+* Only available to callers that have already authenticated to the
+  Staykey gateway (same trust boundary as the rest of the gateway
+  protocol).
+* Not exposed on the public REST webhook action list --- gateway channel
+  only.
+* Privilege level matches whatever Home Assistant already grants the
+  integration user (comparable to Developer Tools » Services).
 """
 
 from __future__ import annotations

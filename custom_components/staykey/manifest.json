@@ -4,9 +4,11 @@
   "version": "1.6.0-beta.12",
   "documentation": "https://github.com/staykey/staykey-ha-plugin",
   "issue_tracker": "https://github.com/staykey/staykey-ha-plugin/issues",
+  "homeassistant": "2026.4.0",
   "requirements": [],
   "after_dependencies": [
-    "zwave_js"
+    "zwave_js",
+    "matter"
   ],
   "codeowners": [
     "@staykey"

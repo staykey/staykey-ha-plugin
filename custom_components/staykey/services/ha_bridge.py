@@ -99,11 +99,10 @@ async def _handle_list_entities(
     hass: HomeAssistant,
     params: Dict[str, Any],
 ) -> list:
-    """List entities in the format expected by Orion's list_ha_entities endpoint.
+    """Flatten discovered devices for list_entities consumers.
 
-    Calls discover_devices internally and reformats the response to the
-    flat array format that Nimbus expects (entity_id, friendly_name, type,
-    etc.).
+    Wraps ``discover_devices`` and returns the flat array of entities the
+    Staykey host API expects (entity id, friendly name, type, etc.).
     """
     result = await device_discovery.handle_discover_devices(hass, params)
     devices = result.get("devices", [])

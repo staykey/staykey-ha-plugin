@@ -29,12 +29,9 @@ async def handle_get_capabilities(
 ) -> Dict[str, Any]:
     """Get detailed capability information for a device.
 
-    Accepts ``external_id`` (the HA entity_id, used by Orion's worker
-    paths and the gateway internal API) **or** ``device_id`` (the
-    Staykey UUID, used by dashboard paths that go through the device
-    map).  This mirrors the dual-key resolution in
-    :mod:`..handlers.lock` so callers don't need to know which key
-    convention applies.
+    Accepts ``external_id`` (the HA ``entity_id``) **or** ``device_id``
+    (resolved through the device map). Matches the dual-key convention in
+    :mod:`..handlers.lock`.
     """
     external_id = params.get("external_id", "")
     device_id = params.get("device_id", "")

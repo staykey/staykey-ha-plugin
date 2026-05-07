@@ -450,6 +450,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 hass.bus.async_listen(event_type, handle_zwave_event_gateway)
             )
 
+    # KNOWN LIMITATION (early Matter lock support):
+    #
+    # Matter devices can produce detailed per-credential lock-operation
+    # events, but Home Assistant's Matter integration (through 2026.4) does
+    # not yet expose them on hass.bus like Z-Wave notification events.
+    # The entity mostly updates `locked`/`unlocked`, so forwarded
+    # `lock_activity` is lower fidelity than Z-Wave. Programming operations
+    # still return structured success/failure in their service responses;
+    # richer keypad history awaits upstream HA event coverage.
+
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         "unsub": unsubscribers,
         "gateway_client": gateway_client,

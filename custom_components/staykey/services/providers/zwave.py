@@ -347,9 +347,14 @@ async def _set_and_verify_code(
                     attempts=attempt + 1,
                 )
             elif result:
+                # NEVER include raw PINs in error strings — they can appear
+                # in activity history and aggregated logs. Compare lengths only.
+                actual = result.get("code")
+                expected_len = len(str(code))
+                actual_len = len(str(actual)) if actual is not None else 0
                 last_error = (
-                    f"Slot {slot} readback mismatch: expected {code}, "
-                    f"got {result.get('code')}"
+                    f"Slot {slot} readback mismatch (expected_length={expected_len}, "
+                    f"actual_length={actual_len})"
                 )
             else:
                 last_error = f"Slot {slot} could not be read from lock"

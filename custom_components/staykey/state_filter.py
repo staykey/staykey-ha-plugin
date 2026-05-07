@@ -1,7 +1,7 @@
 """State change filtering for Staykey gateway forwarding.
 
 Determines which HA state_changed events are meaningful enough to forward
-to the Staykey backend as activity entries. Filters out:
+as activity updates. Filters out:
 - Attribute-only changes (state string unchanged)
 - Transitional cover states (opening/closing)
 """

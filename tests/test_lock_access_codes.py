@@ -76,20 +76,48 @@ def test_matter_extract_entity_response_handles_none():
 # ---------------------------------------------------------------------------
 
 
-def test_lock_supports_access_codes_matter_always_true():
+def test_lock_supports_access_codes_matter_requires_pin_signal():
+    """Matter locks must advertise PIN support via at least one of the
+    concrete signals before we claim ``supports_access_codes``.
+
+    A bare Matter lock with no PIN cluster (e.g. fingerprint-only)
+    must NOT show as supporting access codes — Matter integration
+    auto-registers ``set_lock_credential`` on every Matter lock so the
+    presence of the service is meaningless.
+    """
     from lock_capability_heuristics import lock_supports_access_codes
 
-    # Matter locks: trust the integration registration; supported_features
-    # bit 1 is set independently for unbolt support, not credentials.
-    assert lock_supports_access_codes({"supported_features": 0}, "matter") is True
-    assert lock_supports_access_codes({}, "matter") is True
+    assert (
+        lock_supports_access_codes(
+            {"supported_credential_types": ["pin"]}, "matter"
+        )
+        is True
+    )
+    assert lock_supports_access_codes({"max_pin_users": 10}, "matter") is True
+    assert lock_supports_access_codes({"max_users": 10}, "matter") is True
+    assert (
+        lock_supports_access_codes({"supports_user_management": True}, "matter")
+        is True
+    )
+
+    # Conservative default: no PIN signals -> no access codes.
+    assert lock_supports_access_codes({"supported_features": 1}, "matter") is False
+    assert lock_supports_access_codes({}, "matter") is False
+    assert (
+        lock_supports_access_codes({"supported_credential_types": ["fingerprint"]}, "matter")
+        is False
+    )
 
 
 def test_lock_supports_access_codes_zwave_uses_supported_features_bit():
     from lock_capability_heuristics import lock_supports_access_codes
 
-    assert lock_supports_access_codes({"supported_features": 1}, "zwave_js") is True
-    assert lock_supports_access_codes({"supported_features": 0}, "zwave_js") is False
+    # Runtime passes the normalized protocol string `"zwave"` (see
+    # ``handlers/device_discovery._infer_protocol`` — the
+    # ``zwave_js`` HA domain is normalized to the protocol name the
+    # Staykey cloud side expects before the heuristic runs).
+    assert lock_supports_access_codes({"supported_features": 1}, "zwave") is True
+    assert lock_supports_access_codes({"supported_features": 0}, "zwave") is False
 
 
 def test_lock_supports_access_codes_unknown_protocol_falls_back_to_heuristic():
@@ -213,23 +241,90 @@ def _register_credential_status(
     )
 
 
+def test_matter_set_code_fails_safe_when_preflight_unavailable():
+    """If ``get_lock_credential_status`` raises (HA returns an error or
+    transport fails), the provider must not guess slot occupancy.
+
+    Previously the preflight returned ``None`` on failure and
+    ``set_code`` treated ``None`` the same as "slot is empty",
+    silently taking the Add path even when the slot was actually
+    occupied. That produced double-programming and undefined-behaviour
+    on some firmware.
+
+    Now the provider must surface a verified=False ProviderResult with
+    a ``preflight_unavailable`` marker so upstream automation treats the
+    failure as definitive rather than burning retries.
+    """
+    from homeassistant.exceptions import HomeAssistantError
+
+    from services.providers.matter import MatterLockProvider
+
+    hass = _FakeHass()
+    hass.services.register(
+        "matter",
+        "get_lock_credential_status",
+        HomeAssistantError("matter integration timed out"),
+    )
+
+    provider = MatterLockProvider()
+    result = _run(provider.set_code(hass, "lock.front_door", 7, "1234"))
+
+    # set_lock_credential MUST NOT be called when preflight is unknown.
+    assert not any(c[1] == "set_lock_credential" for c in hass.services.calls), (
+        "set_lock_credential called despite preflight being unavailable - "
+        "this would silently double-program an occupied slot"
+    )
+
+    assert result.verified is False
+    assert "preflight_unavailable" in (result.error or "")
+    assert result.extra.get("operation") == "preflight"
+    assert "preflight_error" in result.extra
+
+
+def test_matter_set_code_preflight_none_payload_takes_add_path():
+    """HA may return a value that extracts to ``None`` (no per-entity dict).
+    That is distinct from :exc:`PreflightUnavailable` (the service call threw)
+    and must still choose the Add path (empty slot).
+    """
+    from services.providers.matter import MatterLockProvider
+
+    hass = _FakeHass()
+    hass.services.register(
+        "matter", "get_lock_credential_status", lambda _data: None
+    )
+
+    hass.services.register(
+        "matter",
+        "set_lock_credential",
+        {
+            "lock.front_door": {
+                "credential_index": 7,
+                "user_index": 42,
+                "next_credential_index": 8,
+            }
+        },
+    )
+
+    provider = MatterLockProvider()
+    result = _run(provider.set_code(hass, "lock.front_door", 7, "1234"))
+
+    assert result.verified is True
+    assert any(c[1] == "set_lock_credential" for c in hass.services.calls)
+
+
 def test_matter_set_code_add_path_passes_user_type_and_omits_user_index():
-    """Bolt SE-compatible Add path (slot empty):
+    """Add path (slot empty) matches HA Matter Lock Manager UI:
 
     * ``credential_index`` = our slot
     * ``user_index`` is **not** sent (null on the wire) so the lock
       auto-allocates a fresh user.
     * ``user_type`` = ``unrestricted_user`` describes that new user.
-    * ``user_status`` is **not** sent — null on the wire.  The HA
-      Matter Lock Manager UI omits it (verified empirically against
-      a real Bolt SE via tap_events capture), and a previous revision
-      that sent ``occupied_enabled`` on this path caused the Bolt SE
-      to write the credential but leave the user in a state where the
-      keypad refused every PIN, even though SetCredential reported
-      ``kSuccess``.
+    * ``user_status`` is **not** sent — null on the wire. The UI omits
+      it, and sending ``occupied_enabled`` here has been observed on some
+      firmware to leave a credential written while the keypad rejects PINs.
 
-    This is the shape the HA Matter Lock Manager UI uses and the only
-    one Bolt SE accepts on Add.
+    This is the payload shape the Matter Lock Manager UI uses and what we
+    mirror for broad compatibility.
     """
     from services.providers.matter import MatterLockProvider
 
@@ -260,13 +355,13 @@ def test_matter_set_code_add_path_passes_user_type_and_omits_user_index():
     )
     assert "user_index" not in set_data, (
         "Add path must omit user_index (null on the wire) so the lock "
-        "auto-allocates a fresh user — Bolt SE rejects Add when "
+        "auto-allocates a fresh user — many Matter locks reject Add when "
         "userIndex is non-null and refers to a missing user"
     )
     assert "user_status" not in set_data, (
-        "Add path must omit user_status — sending it (any value) on "
-        "the Bolt SE produces a written-but-keypad-rejecting user; "
-        "the HA Matter Lock Manager UI also omits it"
+        "Add path must omit user_status — some firmware produces a "
+        "written-but-keypad-rejecting user if it is set; the HA Matter "
+        "Lock Manager UI also omits it"
     )
 
     assert result.verified is True
@@ -372,10 +467,9 @@ def test_matter_set_code_surfaces_non_duplicate_error_as_failure():
 
 
 def test_matter_set_code_surfaces_unknown_im_status_in_extra_and_error():
-    """Reproduction of the Bolt SE rejection: HA renders IM-level
-    status codes as ``unknown(<int>)`` because they aren't in
-    ``SET_CREDENTIAL_STATUS_MAP``.  We must surface that verbatim so
-    Orion's activity log shows the actual lock status.
+    """HA renders some IM-level Matter statuses as ``unknown(<int>)`` when
+    they are not in ``SET_CREDENTIAL_STATUS_MAP``. That value must appear
+    in ``extra`` and in the error string for operators.
     """
     from homeassistant.exceptions import HomeAssistantError
 
@@ -405,8 +499,7 @@ def test_matter_set_code_classifies_unknown_133_as_slot_out_of_range():
     """When ``unknown(133)`` comes back on Add and the lock advertises
     ``max_pin_users < requested slot``, the failure is reclassified as
     ``slot_out_of_range`` so callers see *why* the lock rejected the
-    call.  This is the empirically-observed Bolt SE failure mode for
-    slot 11 with 10 PIN slots.
+    call (e.g. requesting slot 11 when only 10 PIN credentials exist).
     """
     from homeassistant.exceptions import HomeAssistantError
 
@@ -495,11 +588,10 @@ def test_matter_get_capabilities_reports_max_slots_from_max_pin_users():
     ``max_pin_users`` (preferred) or ``max_users`` (fallback).
 
     We size ``max_slots`` conservatively at the lock's user count even
-    when ``max_credentials_per_user >= 2`` — vendor firmware (Ultraloq
-    Bolt SE) caps global PIN credentials at the user count regardless
-    of the spec's implied ``U × C`` ceiling.  Catalogued locks that
-    genuinely support the full product can override via
-    ``SupportedDevice.default_settings`` in Orion.
+    when ``max_credentials_per_user >= 2`` — much vendor firmware caps
+    global PIN credentials at the user count regardless of the spec's
+    implied ``U × C`` ceiling. Hosts with unusual hardware can correct
+    capacity in the Staykey supported-device catalog if needed.
     """
     from services.providers.matter import MatterLockProvider
 
@@ -524,8 +616,7 @@ def test_matter_get_capabilities_reports_max_slots_from_max_pin_users():
     assert caps.supports_access_codes is True
     assert caps.max_slots == 10, (
         "max_slots must be conservative (== max_pin_users) because "
-        "vendor firmware caps global PIN credentials at the user count "
-        "in practice (Bolt SE)"
+        "vendor firmware often caps global PIN credentials at the user count"
     )
 
 
@@ -611,8 +702,8 @@ def test_matter_clear_code_uses_user_index_from_credential_status():
 
 
 def test_matter_clear_code_returns_verified_no_op_when_already_empty():
-    """Important for Oban retries — clearing an already-empty slot
-    must not surface as a failure.
+    """Clearing an already-empty slot must succeed (idempotent) so retries
+    do not flap as hard failures.
     """
     from services.providers.matter import MatterLockProvider
 

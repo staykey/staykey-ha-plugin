@@ -20,7 +20,7 @@ from .utils import ProgressFn, wait_for_state
 
 LOGGER = logging.getLogger(__name__)
 
-_LOCK_STATE_TIMEOUT = 15  # seconds — matches Orion backend
+_LOCK_STATE_TIMEOUT = 15  # seconds — aligned with Staykey API timeouts
 
 
 async def handle_lock(
@@ -114,23 +114,6 @@ async def handle_read_codes(
     return {"slots": [_slot_info_to_dict(s) for s in slots]}
 
 
-async def handle_lock_capabilities(
-    hass: HomeAssistant,
-    device_map: DeviceMap,
-    params: Dict[str, Any],
-) -> Dict[str, Any]:
-    """Get protocol-aware capability info for a lock entity."""
-    entity_id = _resolve_entity_id(device_map, params)
-    provider = providers.select_provider(hass, entity_id)
-    caps = await provider.get_capabilities(hass, entity_id)
-    return {
-        "protocol": provider.name,
-        "supports_access_codes": caps.supports_access_codes,
-        "max_slots": caps.max_slots,
-        "extra": caps.extra,
-    }
-
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -139,9 +122,9 @@ async def handle_lock_capabilities(
 def _resolve_entity_id(device_map: DeviceMap, params: Dict[str, Any]) -> str:
     """Resolve HA entity_id from either ``external_id`` or ``device_id``.
 
-    Orion sends ``external_id`` (the HA entity_id) for worker-driven
-    actions, while dashboard actions send ``device_id`` (Staykey internal
-    UUID that needs a device_map lookup).  Accept both conventions.
+    Remote/API requests often send ``external_id`` (the HA ``entity_id``)
+    directly; others send ``device_id`` (a Staykey-side identifier resolved
+    via the device map). Accept both conventions.
     """
     external_id = params.get("external_id", "")
     if external_id:
@@ -182,6 +165,19 @@ def _provider_result_to_dict(result: ProviderResult) -> Dict[str, Any]:
         out["error"] = result.error
     if result.extra:
         out["extra"] = result.extra
+
+    # Promote structured Matter fields so upstream consumers can classify
+    # failures from stable keys instead of parsing localized `error` text.
+    extra = result.extra or {}
+    matter_status = extra.get("matter_status")
+    if matter_status:
+        out["matter_status"] = matter_status
+
+    # Same for coarse-grained reasons (`slot_out_of_range`, etc.).
+    reason = extra.get("reason")
+    if reason:
+        out["reason"] = reason
+
     return out
 
 
