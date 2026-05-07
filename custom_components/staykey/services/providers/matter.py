@@ -29,28 +29,29 @@ sibling slots in the same user-group to discover an existing
 user_index.  Then we send a single ``matter.set_lock_credential``
 shaped for that branch:
 
-==================================  ===============  ==========  =====================  ====================
+==================================  ===============  ==========  =====================  ===========
 Slot / user-group state             operation        user_index  user_type              user_status
-==================================  ===============  ==========  =====================  ====================
-Empty slot, group has no siblings   HA picks kAdd    *null*      ``unrestricted_user``  ``occupied_enabled``
+==================================  ===============  ==========  =====================  ===========
+Empty slot, group has no siblings   HA picks kAdd    *null*      ``unrestricted_user``  *null*
 Empty slot, group has a sibling     HA picks kAdd    discovered  *null*                 *null*
 Occupied slot                       HA picks kModify existing N  *null*                 *null*
-==================================  ===============  ==========  =====================  ====================
+==================================  ===============  ==========  =====================  ===========
 
 All three shapes are spec-compliant per Matter 1.x §5.2.4.40 and the
 connectedhomeip validity check (``DoorLockServer::SetCredential``,
 chip ``16657402aa``):
 
-* **Add + userIndex null** → ``userStatus`` and ``userType`` describe
-  the user the lock will auto-create.  We send ``user_type =
-  unrestricted_user`` *and* ``user_status = occupied_enabled`` here to
-  match HA's own ``set_lock_user`` defaults (line 357–364 of
-  ``lock_helpers.py``).  Omitting ``user_status`` lets the underlying
-  SDK pass ``userStatus = null`` to the lock; on the Ultraloq Bolt SE
-  that produces a fully written-but-disabled user, so SetCredential
-  returns ``kSuccess`` (``verified=true`` from our side) but the keypad
-  rejects every PIN.  Passing ``occupied_enabled`` is what the HA Lock
-  Manager UI does and what the Bolt SE actually accepts.
+* **Add + userIndex null** → ``userType`` describes the user the lock
+  will auto-create; ``userStatus`` is omitted (null on the wire).
+  This matches the captured payload of HA's Matter Lock Manager UI
+  byte-for-byte, which is the only payload empirically confirmed to
+  produce a working PIN on the Ultraloq Bolt SE.  An earlier revision
+  (plugin v1.6.0-beta.9) sent ``user_status = occupied_enabled`` here
+  on the theory that an explicit-enable would help, but the Bolt SE
+  reacted by writing the credential and leaving the user in a state
+  where the keypad refused every PIN, even though SetCredential
+  returned ``kSuccess``.  Reverting to "user_status omitted" restored
+  parity with the UI flow.
 * **Modify + userIndex non-null** → ``userStatus`` and ``userType``
   MUST both be null; the lock keeps the existing user attributes and
   only swaps the PIN bytes.
@@ -135,21 +136,17 @@ _PIN = "pin"
 
 # Matches HA's ``USER_TYPE_MAP`` enum — sent on the wire for the Add
 # path so the lock auto-creates a non-restricted (always-valid) user.
+#
+# We deliberately do **not** send ``user_status`` alongside it: the HA
+# Matter Lock Manager UI omits it (verified empirically against the
+# Ultraloq Bolt SE via tap_events capture), and the matter-server SDK
+# defaults ``userStatus`` to its own working value when the field is
+# null on the wire.  Sending ``user_status=occupied_enabled`` —
+# attempted in plugin v1.6.0-beta.9 — caused the Bolt SE to write the
+# credential but leave the user in a state where the keypad refused
+# every PIN, even though SetCredential reported ``kSuccess``.  Removing
+# user_status restored parity with the UI flow.
 _USER_TYPE_DEFAULT = "unrestricted_user"
-
-# Matches HA's ``USER_STATUS_MAP`` enum.  Sent alongside
-# ``_USER_TYPE_DEFAULT`` on the fresh-user Add path so the auto-created
-# user lands in the active state.  ``matter.set_lock_credential`` will
-# pass ``userStatus=null`` to the SDK when this argument is omitted, and
-# at least one real-world lock (Ultraloq Bolt SE) interprets a null
-# userStatus on user creation as "store the credential but leave the
-# user disabled" — the credential then verifies at the protocol level
-# (SetCredential returns kSuccess) but the keypad rejects every PIN.
-# Passing ``occupied_enabled`` mirrors what HA's own set_lock_user
-# defaults to for new-user creation and what the HA Lock Manager UI
-# sends when programming a fresh PIN, both of which are confirmed
-# working on the Bolt SE.
-_USER_STATUS_DEFAULT = "occupied_enabled"
 
 # DoorLock SetCredential status codes that are non-fatal for our use
 # case.  Mapped from chip.clusters.DoorLock.Enums.DlStatus by HA in
@@ -269,16 +266,13 @@ class MatterLockProvider:
             request_payload["user_index"] = stacked_user_index
         else:
             # No user_index → null on the wire → lock auto-allocates a
-            # fresh user.  user_type and user_status describe that new
-            # user.  Both are required: omitting user_status causes
-            # firmware like the Ultraloq Bolt SE to leave the user
-            # disabled (writes accepted at the protocol level but the
-            # PIN is rejected at the keypad — exactly the symptom that
-            # used to bite us before this fix).  This is also the path
-            # for non-stacking locks (1 credential per user) where
+            # fresh user.  ``user_type`` describes the auto-created
+            # user; ``user_status`` is intentionally omitted (see the
+            # ``_USER_TYPE_DEFAULT`` constant for why — sending it
+            # actively breaks the Bolt SE).  This is also the path for
+            # non-stacking locks (1 credential per user) where
             # ``max_credentials_per_user`` is None or 1.
             request_payload["user_type"] = _USER_TYPE_DEFAULT
-            request_payload["user_status"] = _USER_STATUS_DEFAULT
         LOGGER.debug(
             "matter.set_lock_credential request: entity_id=%s slot=%d "
             "operation=%s code_length=%d user_index=%s "

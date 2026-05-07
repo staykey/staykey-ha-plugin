@@ -222,11 +222,13 @@ def test_matter_set_code_add_path_passes_user_type_and_omits_user_index():
     * ``user_index`` is **not** sent (null on the wire) so the lock
       auto-allocates a fresh user.
     * ``user_type`` = ``unrestricted_user`` describes that new user.
-    * ``user_status`` = ``occupied_enabled`` enables the user
-      immediately.  Mirrors HA's ``set_lock_user`` defaults — without
-      this the Bolt SE writes the credential but leaves the user
-      disabled, so the keypad rejects every PIN even though
-      SetCredential returned ``kSuccess``.
+    * ``user_status`` is **not** sent — null on the wire.  The HA
+      Matter Lock Manager UI omits it (verified empirically against
+      a real Bolt SE via tap_events capture), and a previous revision
+      that sent ``occupied_enabled`` on this path caused the Bolt SE
+      to write the credential but leave the user in a state where the
+      keypad refused every PIN, even though SetCredential reported
+      ``kSuccess``.
 
     This is the shape the HA Matter Lock Manager UI uses and the only
     one Bolt SE accepts on Add.
@@ -263,10 +265,10 @@ def test_matter_set_code_add_path_passes_user_type_and_omits_user_index():
         "auto-allocates a fresh user — Bolt SE rejects Add when "
         "userIndex is non-null and refers to a missing user"
     )
-    assert set_data.get("user_status") == "occupied_enabled", (
-        "Add path must send user_status=occupied_enabled — without it "
-        "Bolt SE leaves the auto-created user disabled and the keypad "
-        "rejects every PIN, even though SetCredential reports success"
+    assert "user_status" not in set_data, (
+        "Add path must omit user_status — sending it (any value) on "
+        "the Bolt SE produces a written-but-keypad-rejecting user; "
+        "the HA Matter Lock Manager UI also omits it"
     )
 
     assert result.verified is True
@@ -531,7 +533,7 @@ def test_matter_set_code_add_path_with_max_credentials_per_user_one_skips_user_i
     set_data = set_call[2]
     assert "user_index" not in set_data
     assert set_data.get("user_type") == "unrestricted_user"
-    assert set_data.get("user_status") == "occupied_enabled"
+    assert "user_status" not in set_data
     # No additional credential_status probes beyond the preflight.
     status_calls = [c for c in hass.services.calls if c[1] == "get_lock_credential_status"]
     assert len(status_calls) == 1
@@ -594,7 +596,7 @@ def test_matter_set_code_add_path_in_fresh_user_group_lets_lock_auto_allocate():
         "Fresh user-group must omit user_index so the lock auto-allocates"
     )
     assert set_data.get("user_type") == "unrestricted_user"
-    assert set_data.get("user_status") == "occupied_enabled"
+    assert "user_status" not in set_data
 
     # Slot 6 + probes for slots 7, 8, 9, 10 = 5 credential_status calls
     status_slots = [
