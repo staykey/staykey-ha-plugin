@@ -1,3 +1,10 @@
+## [1.6.0-beta.12](https://github.com/staykey/staykey-ha-plugin/compare/v1.6.0-beta.11...v1.6.0-beta.12) (2026-05-07)
+
+
+### Features
+
+* **staykey:** remove max_users and max_credentials_per_user from capability handling ([6e6aeb4](https://github.com/staykey/staykey-ha-plugin/commit/6e6aeb4f44fc21523420fdad3f15ecefc0499b1e))
+
 ## [1.6.0-beta.11](https://github.com/staykey/staykey-ha-plugin/compare/v1.6.0-beta.10...v1.6.0-beta.11) (2026-05-07)
 
 
