@@ -1,3 +1,10 @@
+## [1.6.0-beta.11](https://github.com/staykey/staykey-ha-plugin/compare/v1.6.0-beta.10...v1.6.0-beta.11) (2026-05-07)
+
+
+### Bug Fixes
+
+* **staykey:** simplify SetCredential logic for Matter locks ([c6d4b25](https://github.com/staykey/staykey-ha-plugin/commit/c6d4b25d69132bec438dcc796c50fb25b00208a2))
+
 ## [1.6.0-beta.10](https://github.com/staykey/staykey-ha-plugin/compare/v1.6.0-beta.9...v1.6.0-beta.10) (2026-05-07)
 
 
