@@ -59,18 +59,10 @@ class CapabilityInfo:
     """Capability summary for a lock entity.
 
     ``max_slots`` is the total number of usable PIN positions (effective
-    code slots).  For Z-Wave this is the lock's user-code count; for
-    Matter it's ``max_users * max_credentials_per_user`` once we
-    user-stack credentials, falling back to ``max_pin_users`` /
-    ``max_users`` when the lock doesn't advertise per-user stacking.
-
-    ``max_users`` and ``max_credentials_per_user`` are Matter-specific
-    capacity hints — Matter §5.2.4.41 lets each lock user hold up to
-    ``NumberOfCredentialsSupportedPerUser`` PIN credentials, which lets
-    low-user-count locks (e.g. Ultraloq Bolt SE: 10 users × 5 PINs = 50
-    effective slots) carry far more codes than their advertised user
-    count would suggest.  Both are ``None`` for protocols that don't
-    expose them.
+    code slots).  For Z-Wave it's the lock's user-code count; for Matter
+    it's ``NumberOfPINUsersSupported`` (the empirical global PIN
+    credential cap, see ``MatterLockProvider`` for why we don't multiply
+    by ``NumberOfCredentialsSupportedPerUser``).
 
     ``extra`` is protocol-specific (e.g. Z-Wave node statistics, Matter
     feature map bits).
@@ -78,8 +70,6 @@ class CapabilityInfo:
 
     supports_access_codes: bool
     max_slots: Optional[int] = None
-    max_users: Optional[int] = None
-    max_credentials_per_user: Optional[int] = None
     extra: Dict[str, Any] = field(default_factory=dict)
 
 

@@ -78,12 +78,6 @@ async def handle_get_capabilities(
             capabilities["supports_access_codes"] = caps.supports_access_codes
             if caps.max_slots is not None:
                 capabilities["max_slots"] = caps.max_slots
-            if caps.max_users is not None:
-                capabilities["max_users"] = caps.max_users
-            if caps.max_credentials_per_user is not None:
-                capabilities["max_credentials_per_user"] = (
-                    caps.max_credentials_per_user
-                )
             if caps.extra:
                 capabilities[provider.name] = caps.extra
             return capabilities

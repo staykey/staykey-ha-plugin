@@ -33,8 +33,6 @@ def test_capability_info_defaults():
 
     c = CapabilityInfo(supports_access_codes=True)
     assert c.max_slots is None
-    assert c.max_users is None
-    assert c.max_credentials_per_user is None
     assert c.extra == {}
 
 
@@ -492,19 +490,16 @@ def test_matter_set_code_marks_in_range_unknown_133_as_lock_rejected():
     assert "matter_status=unknown(133)" in (result.error or "")
 
 
-def test_matter_get_capabilities_exposes_max_users_and_credentials_per_user():
-    """``get_capabilities`` must surface all three Matter capacity caps so
-    Orion's CapabilityLearner can persist them as telemetry:
-    ``max_users``, ``max_credentials_per_user``, and the derived
-    ``max_slots``.
+def test_matter_get_capabilities_reports_max_slots_from_max_pin_users():
+    """``get_capabilities`` reports ``max_slots`` equal to the lock's
+    ``max_pin_users`` (preferred) or ``max_users`` (fallback).
 
-    ``max_slots`` is conservative — equal to ``max_users`` even when
-    the lock advertises ``max_credentials_per_user >= 2`` — because
-    real-world firmware (Ultraloq Bolt SE) caps global PIN credentials
-    at the user count regardless of the spec's implied ``U × C``
-    ceiling.  Catalogued locks that genuinely support the full
-    product can override via ``SupportedDevice.default_settings`` in
-    Orion.
+    We size ``max_slots`` conservatively at the lock's user count even
+    when ``max_credentials_per_user >= 2`` — vendor firmware (Ultraloq
+    Bolt SE) caps global PIN credentials at the user count regardless
+    of the spec's implied ``U × C`` ceiling.  Catalogued locks that
+    genuinely support the full product can override via
+    ``SupportedDevice.default_settings`` in Orion.
     """
     from services.providers.matter import MatterLockProvider
 
@@ -527,19 +522,15 @@ def test_matter_get_capabilities_exposes_max_users_and_credentials_per_user():
     caps = _run(provider.get_capabilities(hass, "lock.front_door"))
 
     assert caps.supports_access_codes is True
-    assert caps.max_users == 10
-    assert caps.max_credentials_per_user == 5
     assert caps.max_slots == 10, (
-        "max_slots must be conservative (== max_users) because vendor "
-        "firmware caps global PIN credentials at max_users in practice "
-        "(Bolt SE)"
+        "max_slots must be conservative (== max_pin_users) because "
+        "vendor firmware caps global PIN credentials at the user count "
+        "in practice (Bolt SE)"
     )
 
 
-def test_matter_get_capabilities_falls_back_to_max_users_when_per_user_cap_is_one():
-    """Locks that report ``max_credentials_per_user`` of 1 (or omit it)
-    still report ``max_slots`` equal to ``max_users``.
-    """
+def test_matter_get_capabilities_falls_back_to_max_users_when_max_pin_users_missing():
+    """When ``max_pin_users`` is absent, fall back to ``max_users``."""
     from services.providers.matter import MatterLockProvider
 
     hass = _FakeHass()
@@ -550,8 +541,7 @@ def test_matter_get_capabilities_falls_back_to_max_users_when_per_user_cap_is_on
             "lock.front_door": {
                 "supports_user_management": True,
                 "supported_credential_types": ["pin"],
-                "max_pin_users": 250,
-                "max_credentials_per_user": 1,
+                "max_users": 250,
             }
         },
     )
@@ -559,8 +549,6 @@ def test_matter_get_capabilities_falls_back_to_max_users_when_per_user_cap_is_on
     provider = MatterLockProvider()
     caps = _run(provider.get_capabilities(hass, "lock.front_door"))
 
-    assert caps.max_users == 250
-    assert caps.max_credentials_per_user == 1
     assert caps.max_slots == 250
 
 

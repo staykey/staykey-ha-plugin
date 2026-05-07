@@ -544,14 +544,9 @@ class MatterLockProvider:
             bool(info.get("supports_user_management"))
             and _PIN in (info.get("supported_credential_types") or [])
         )
-        max_users = _extract_max_users(info)
-        max_credentials_per_user = _extract_max_credentials_per_user(info)
-        max_slots = _derive_max_slots(max_users, max_credentials_per_user)
         return CapabilityInfo(
             supports_access_codes=supports,
-            max_slots=max_slots,
-            max_users=max_users,
-            max_credentials_per_user=max_credentials_per_user,
+            max_slots=_extract_max_slots(info),
             extra=info,
         )
 
@@ -671,17 +666,11 @@ async def _enrich_with_capacity_context(
     if not info:
         return
 
-    max_users = _extract_max_users(info)
-    max_credentials_per_user = _extract_max_credentials_per_user(info)
-    max_slots = _derive_max_slots(max_users, max_credentials_per_user)
+    max_slots = _extract_max_slots(info)
     if not isinstance(max_slots, int) or max_slots <= 0:
         return
 
     extra["max_slots"] = max_slots
-    if max_users is not None:
-        extra["max_users"] = max_users
-    if max_credentials_per_user is not None:
-        extra["max_credentials_per_user"] = max_credentials_per_user
     extra["slot"] = slot
     if slot > max_slots:
         extra["reason"] = "slot_out_of_range"
@@ -822,15 +811,25 @@ async def _get_lock_info(
     return _extract_entity_response(response, entity_id)
 
 
-def _extract_max_users(info: Dict[str, Any]) -> Optional[int]:
-    """Pick the most-specific PIN-user count from a ``get_lock_info`` payload.
+def _extract_max_slots(info: Dict[str, Any]) -> Optional[int]:
+    """Pick the PIN slot capacity from a ``get_lock_info`` payload.
 
-    HA's matter integration may surface ``max_pin_users`` (preferred — that
-    field is the count of PIN-credential users specifically, per
+    HA's matter integration may surface ``max_pin_users`` (preferred — the
+    PIN-credential user count specifically, per
     ``NumberOfPINUsersSupported``) and/or the broader ``max_users``
     (``NumberOfTotalUsersSupported``).  Prefer the PIN-specific number when
     both are present, since users that can't hold PINs aren't useful slots
-    for our purposes.
+    for us.
+
+    The Matter spec (§5.2.4.41) implies a lock that also advertises
+    ``NumberOfCredentialsSupportedPerUser = C`` can hold ``U × C`` PIN
+    credentials.  In practice firmware like the Ultraloq Bolt SE enforces
+    a tighter global cap equal to ``U`` even when ``C > 1`` (empirically
+    rejects credential_index 11+ once 10 PIN credentials are programmed,
+    regardless of distribution across users).  We therefore size
+    ``max_slots = max_users`` only; locks that genuinely support the
+    full ``U × C`` cap can override via
+    ``SupportedDevice.default_settings`` in Orion.
     """
     candidates = (
         info.get("max_pin_users"),
@@ -839,48 +838,4 @@ def _extract_max_users(info: Dict[str, Any]) -> Optional[int]:
     for candidate in candidates:
         if isinstance(candidate, int) and candidate > 0:
             return candidate
-    return None
-
-
-def _extract_max_credentials_per_user(info: Dict[str, Any]) -> Optional[int]:
-    """Pick the per-user credential cap from a ``get_lock_info`` payload.
-
-    Maps to Matter §5.2.4.41 ``NumberOfCredentialsSupportedPerUser``.  The
-    HA Matter integration exposes it as ``max_credentials_per_user``.
-
-    We surface this in capability telemetry but no longer use it to
-    influence ``max_slots`` — see ``_derive_max_slots``.  Returns
-    ``None`` when absent.
-    """
-    value = info.get("max_credentials_per_user")
-    if isinstance(value, int) and value > 0:
-        return value
-    return None
-
-
-def _derive_max_slots(
-    max_users: Optional[int],
-    max_credentials_per_user: Optional[int],
-) -> Optional[int]:
-    """Compute the conservative PIN slot capacity from Matter capacity caps.
-
-    The Matter spec (§5.2.4.41) implies a lock that advertises
-    ``NumberOfPINUsersSupported = U`` and
-    ``NumberOfCredentialsSupportedPerUser = C`` can hold ``U × C`` PIN
-    credentials.  In practice some firmware (e.g. Ultraloq Bolt SE)
-    enforces a tighter global cap equal to ``U`` even though the
-    per-user cap is C > 1 — empirically the Bolt SE rejects
-    credential_index 11+ once 10 PIN credentials are programmed,
-    regardless of how those credentials are distributed across users.
-
-    We therefore default ``max_slots`` to ``max_users`` only.
-    Catalogued locks that we verify support the spec's full ``U × C``
-    cap can override ``max_codes`` via
-    ``SupportedDevice.default_settings``.
-
-    Returns ``None`` when we can't determine a positive count.
-    """
-    _ = max_credentials_per_user  # surfaced as telemetry, not used for sizing
-    if isinstance(max_users, int) and max_users > 0:
-        return max_users
     return None
