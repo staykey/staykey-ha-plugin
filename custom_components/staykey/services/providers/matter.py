@@ -18,26 +18,33 @@ We therefore mirror the flow the official HA Matter Lock Manager UI
 uses, which is known to work on Aqara U200/U300, Yale Assure 2,
 Schlage Sense Pro, Z-Wave-via-Matter bridges, and the Bolt SE.
 
-## Three-branch SetCredential by slot occupancy and user-group state
+## Two-branch SetCredential by slot occupancy
 
-We always pre-flight the slot with ``matter.get_lock_credential_status``
-to learn (a) whether HA will pick ``kAdd`` or ``kModify`` and (b) the
-current user_index for Modify.  On Add we also call
-``matter.get_lock_info`` to learn ``max_credentials_per_user`` (Matter
-§5.2.4.41), and when the lock supports user-stacking (>=2) we probe
-sibling slots in the same user-group to discover an existing
-user_index.  Then we send a single ``matter.set_lock_credential``
-shaped for that branch:
+We pre-flight the slot with ``matter.get_lock_credential_status`` to
+learn (a) whether HA will pick ``kAdd`` or ``kModify`` and (b) the
+current user_index for Modify.  Then we send a single
+``matter.set_lock_credential`` shaped for that branch:
 
-==================================  ===============  ==========  =====================  ===========
-Slot / user-group state             operation        user_index  user_type              user_status
-==================================  ===============  ==========  =====================  ===========
-Empty slot, group has no siblings   HA picks kAdd    *null*      ``unrestricted_user``  *null*
-Empty slot, group has a sibling     HA picks kAdd    discovered  *null*                 *null*
-Occupied slot                       HA picks kModify existing N  *null*                 *null*
-==================================  ===============  ==========  =====================  ===========
+==================================  ================  ==========  =====================  ===========
+Slot state                          operation         user_index  user_type              user_status
+==================================  ================  ==========  =====================  ===========
+Empty slot                          HA picks kAdd     *null*      ``unrestricted_user``  *null*
+Occupied slot                       HA picks kModify  existing N  *null*                 *null*
+==================================  ================  ==========  =====================  ===========
 
-All three shapes are spec-compliant per Matter 1.x §5.2.4.40 and the
+We considered user-stacking (multiple PIN credentials sharing one
+``user_index``) per Matter §5.2.4.41 — the Bolt SE advertises 5 PINs
+per user, which would have notionally given us 50 effective slots.
+Empirically the Bolt SE caps total PIN credentials globally at
+``max_pin_users`` regardless of distribution, so stacking provided no
+capacity benefit; HA's matter integration also doesn't currently
+surface ``user_index`` on ``LockOperation`` events, so the
+recipient-resolution argument disappears too.  We removed the
+sibling-slot probe; if a future use case revives stacking, the probe
+logic is in this module's git history (commits ``b2f1c…`` and
+``397f13e``).
+
+Both shapes are spec-compliant per Matter 1.x §5.2.4.40 and the
 connectedhomeip validity check (``DoorLockServer::SetCredential``,
 chip ``16657402aa``):
 
@@ -176,13 +183,9 @@ class MatterLockProvider:
     ) -> ProviderResult:
         """Set a PIN credential for *slot*, auto-creating the user if needed.
 
-        Three-branch single ``matter.set_lock_credential`` call.  We
-        first preflight the slot via
-        ``matter.get_lock_credential_status``; on the Add path we also
-        check ``matter.get_lock_info`` for ``max_credentials_per_user``
-        and, when the lock supports user-stacking (Matter §5.2.4.41,
-        e.g. Bolt SE: 5 PINs per user), probe the other slots in the
-        same user-group for an existing user_index:
+        Two-branch single ``matter.set_lock_credential`` call.  We
+        preflight the slot via ``matter.get_lock_credential_status`` to
+        decide between Add and Modify:
 
         * **Modify path (slot has a credential)** — send
           ``credential_index=slot``,
@@ -190,25 +193,27 @@ class MatterLockProvider:
           ``user_status`` and ``user_type`` null.  HA dispatches
           ``SetCredential(kModify)`` and the lock updates the PIN
           bytes for the existing user.
-        * **Add path, fresh user-group** (no other slot in this
-          credential's user-group is occupied) — send
+        * **Add path (slot is empty)** — send
           ``credential_index=slot``, ``user_index=null``,
           ``user_type=unrestricted_user``, ``user_status=null``.  HA
           dispatches ``SetCredential(kAdd)``; the lock auto-allocates a
           fresh user with the supplied user_type and attaches the PIN
-          at our ``credential_index``.  This is also the path used for
-          non-stacking locks where ``max_credentials_per_user`` is None
-          or 1.
-        * **Add path, existing user-group** (another slot in this
-          credential's user-group is already occupied) — send
-          ``credential_index=slot``,
-          ``user_index=<discovered from sibling slot>``, both
-          ``user_status`` and ``user_type`` null.  HA dispatches
-          ``SetCredential(kAdd)`` but with a non-null userIndex, so the
-          lock attaches the PIN to the existing user without modifying
-          its attributes.  This is what unlocks user-stacking on the
-          Bolt SE: the lock auto-creates the user only on the first
-          credential, and we attach the rest by discovered user_index.
+          at our ``credential_index``.  Each Staykey-managed credential
+          gets its own auto-allocated user — we don't try to stack
+          multiple credentials onto a single ``user_index``.
+
+        We considered user-stacking (multiple PIN credentials sharing
+        one ``user_index``) per Matter §5.2.4.41 — on the Ultraloq
+        Bolt SE that allows up to 5 PINs per user.  In practice it
+        provided no capacity benefit (the Bolt SE caps total PIN
+        credentials globally at ``max_pin_users``, regardless of
+        distribution) and HA's matter integration doesn't currently
+        surface ``user_index`` on ``LockOperation`` events anyway, so
+        the recipient-resolution argument disappears.  Keeping each
+        credential under its own user keeps the data model simple and
+        unambiguous; if a future use case revives stacking, the probe
+        logic is in this module's git history (commits ``b2f1c…`` and
+        ``397f13e``).
 
         If the lock returns ``duplicate`` (same PIN bytes already
         programmed), we treat that as a verified no-op so Oban retries
@@ -225,25 +230,6 @@ class MatterLockProvider:
         is_modify = bool(existing and existing.get("credential_exists"))
         operation = "modify" if is_modify else "add"
 
-        # On the Add path we may need the lock's per-user credential cap to
-        # decide whether to attach to an existing user (user-stacking, e.g.
-        # Bolt SE: 5 PINs per user) or let the lock auto-allocate a fresh
-        # user.  Modify never needs it — we always reuse the credential's
-        # current user_index.
-        max_credentials_per_user: Optional[int] = None
-        stacked_user_index: Optional[int] = None
-        if not is_modify:
-            info = await _get_lock_info(hass, entity_id)
-            if info:
-                max_credentials_per_user = _extract_max_credentials_per_user(info)
-            if (
-                max_credentials_per_user is not None
-                and max_credentials_per_user >= 2
-            ):
-                stacked_user_index = await _find_existing_user_index_in_group(
-                    hass, entity_id, slot, max_credentials_per_user
-                )
-
         request_payload: Dict[str, Any] = {
             "entity_id": entity_id,
             "credential_type": _PIN,
@@ -256,34 +242,21 @@ class MatterLockProvider:
                 request_payload["user_index"] = existing_user_index
             # No user_type / user_status: must both be null on Modify
             # when userIndex is non-null (chip SDK validity check).
-        elif stacked_user_index is not None:
-            # Add path, but another credential in this user-group is
-            # already programmed — attach this PIN to the same lock-side
-            # user.  user_index pinpoints the existing user; user_type /
-            # user_status MUST be null so the lock keeps the existing
-            # user record intact (matches HA's "add credential to user"
-            # UI flow on the Bolt SE).
-            request_payload["user_index"] = stacked_user_index
         else:
             # No user_index → null on the wire → lock auto-allocates a
             # fresh user.  ``user_type`` describes the auto-created
             # user; ``user_status`` is intentionally omitted (see the
             # ``_USER_TYPE_DEFAULT`` constant for why — sending it
-            # actively breaks the Bolt SE).  This is also the path for
-            # non-stacking locks (1 credential per user) where
-            # ``max_credentials_per_user`` is None or 1.
+            # actively breaks the Bolt SE).
             request_payload["user_type"] = _USER_TYPE_DEFAULT
         LOGGER.debug(
             "matter.set_lock_credential request: entity_id=%s slot=%d "
-            "operation=%s code_length=%d user_index=%s "
-            "max_credentials_per_user=%s stacked=%s",
+            "operation=%s code_length=%d user_index=%s",
             entity_id,
             slot,
             operation,
             len(code),
             request_payload.get("user_index", "<auto>"),
-            max_credentials_per_user if max_credentials_per_user is not None else "-",
-            stacked_user_index is not None,
         )
 
         set_response: Optional[Dict[str, Any]] = None
@@ -803,58 +776,6 @@ def _format_log_error(error: Optional[str], exc: Optional[BaseException]) -> str
     return "-"
 
 
-async def _find_existing_user_index_in_group(
-    hass: HomeAssistant,
-    entity_id: str,
-    slot: int,
-    max_credentials_per_user: int,
-) -> Optional[int]:
-    """Probe other slots in the same user-group for an existing user_index.
-
-    Matter §5.2.4.41 lets each lock user hold up to
-    ``NumberOfCredentialsSupportedPerUser`` PIN credentials.  To attach a
-    new credential to that user we need its lock-side ``user_index``,
-    which the lock allocates dynamically — we don't pick it.  When adding
-    the second-or-later credential of a user we discover the user_index
-    by reading any other occupied slot in the same group.
-
-    A "user-group" is the contiguous run of credential_index values that
-    map to a single lock user, e.g. with ``max_credentials_per_user=5``:
-
-    ====  ====
-    Slot  User-group
-    ====  ====
-    1-5   group 1 (group_start=1)
-    6-10  group 2 (group_start=6)
-    ...   ...
-    ====  ====
-
-    Returns ``None`` when no other slot in the group is occupied (i.e.
-    this is the first credential of a fresh user — caller should send
-    ``user_index=null`` so the lock auto-allocates).  We probe in slot
-    order to short-circuit on the most common case (group_start was
-    written first), capping the worst-case cost at
-    ``max_credentials_per_user - 1`` ``get_lock_credential_status``
-    calls.
-    """
-    if max_credentials_per_user < 2:
-        return None
-    group_start = (
-        ((slot - 1) // max_credentials_per_user) * max_credentials_per_user + 1
-    )
-    group_end = group_start + max_credentials_per_user - 1
-    for probe_slot in range(group_start, group_end + 1):
-        if probe_slot == slot:
-            continue
-        status = await _get_credential_status(hass, entity_id, probe_slot)
-        if not status or not status.get("credential_exists"):
-            continue
-        user_index = status.get("user_index")
-        if isinstance(user_index, int):
-            return user_index
-    return None
-
-
 async def _get_credential_status(
     hass: HomeAssistant, entity_id: str, slot: int
 ) -> Optional[Dict[str, Any]]:
@@ -925,10 +846,11 @@ def _extract_max_credentials_per_user(info: Dict[str, Any]) -> Optional[int]:
     """Pick the per-user credential cap from a ``get_lock_info`` payload.
 
     Maps to Matter §5.2.4.41 ``NumberOfCredentialsSupportedPerUser``.  The
-    HA Matter integration exposes it as ``max_credentials_per_user``.  We
-    return ``None`` when absent so callers know to fall back to the
-    1-credential-per-user default (which preserves the pre-stacking
-    behaviour).
+    HA Matter integration exposes it as ``max_credentials_per_user``.
+
+    We surface this in capability telemetry but no longer use it to
+    influence ``max_slots`` — see ``_derive_max_slots``.  Returns
+    ``None`` when absent.
     """
     value = info.get("max_credentials_per_user")
     if isinstance(value, int) and value > 0:
@@ -952,18 +874,13 @@ def _derive_max_slots(
     regardless of how those credentials are distributed across users.
 
     We therefore default ``max_slots`` to ``max_users`` only.
-    User-stacking (multiple credentials sharing one ``user_index``) is
-    still supported on the wire — see ``set_code`` and
-    ``_find_existing_user_index_in_group`` — because it has
-    architectural value beyond raw capacity (recipient resolution,
-    keeping a guest's stay-+-cleaning credentials under one lock-side
-    user, etc.).  Catalogued locks that we verify support the spec's
-    full ``U × C`` cap can override ``max_codes`` via
+    Catalogued locks that we verify support the spec's full ``U × C``
+    cap can override ``max_codes`` via
     ``SupportedDevice.default_settings``.
 
     Returns ``None`` when we can't determine a positive count.
     """
-    _ = max_credentials_per_user  # consulted by callers, not max-slots derivation
+    _ = max_credentials_per_user  # surfaced as telemetry, not used for sizing
     if isinstance(max_users, int) and max_users > 0:
         return max_users
     return None
