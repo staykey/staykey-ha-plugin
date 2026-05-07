@@ -15,7 +15,7 @@ from .utils import ProgressFn, wait_for_state
 
 LOGGER = logging.getLogger(__name__)
 
-_COVER_STATE_TIMEOUT = 30  # seconds — matches Orion backend
+_COVER_STATE_TIMEOUT = 30  # seconds — aligned with Staykey API timeouts
 
 
 async def handle_open_cover(

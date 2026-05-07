@@ -1,6 +1,10 @@
 """Bridge between Staykey command schemas and HA service calls.
 
 Routes incoming commands to the appropriate handler based on action name.
+Access-code commands (``set_lock_access_code`` / ``clear_lock_access_code``
+/ ``get_lock_access_codes``) all go through ``handlers/lock.py``, which
+in turn dispatches to the protocol-specific
+:class:`LockProvider <.lock_provider.LockProvider>`.
 """
 
 from __future__ import annotations
@@ -18,20 +22,25 @@ from ..handlers import (
     cover,
     device_discovery,
     diagnostics,
+    event_tap,
     lock,
+    passthrough,
     state,
     switch,
 )
 from ..handlers.utils import ProgressFn
-from ..services import zwave
 
 LOGGER = logging.getLogger(__name__)
 
 _ACTION_MAP = {
     "lock": lock.handle_lock,
     "unlock": lock.handle_unlock,
+    "set_access_code": lock.handle_set_access_code,
+    "set_lock_access_code": lock.handle_set_access_code,
     "clear_access_code": lock.handle_clear_access_code,
     "clear_lock_access_code": lock.handle_clear_access_code,
+    "get_access_codes": lock.handle_read_codes,
+    "get_lock_access_codes": lock.handle_read_codes,
     "get_state": state.handle_get_state,
     "get_capabilities": capability.handle_get_capabilities,
     "get_diagnostics": diagnostics.handle_get_diagnostics,
@@ -42,6 +51,8 @@ _ACTION_MAP = {
     "turn_off": switch.handle_turn_off,
     "set_temperature": climate.handle_set_temperature,
     "set_hvac_mode": climate.handle_set_hvac_mode,
+    "ha_service_call": passthrough.handle_ha_service_call,
+    "tap_events": event_tap.handle_tap_events,
 }
 
 _PROGRESS_ACTIONS = {"lock", "unlock", "open_cover", "close_cover"}
@@ -72,10 +83,6 @@ def create_command_handler(
                 return await handler(hass, device_map, params, progress_fn=progress_fn)
             return await handler(hass, device_map, params)
 
-        if action in ("set_access_code", "set_lock_access_code"):
-            return await _handle_set_access_code(hass, device_map, params)
-        if action in ("get_access_codes", "get_lock_access_codes"):
-            return await _handle_get_access_codes(hass, device_map, params)
         if action == "discover_devices":
             return await device_discovery.handle_discover_devices(hass, params)
         if action == "list_entities":
@@ -88,75 +95,14 @@ def create_command_handler(
     return handle_command
 
 
-def _resolve_entity_id(
-    device_map: DeviceMap,
-    params: Dict[str, Any],
-) -> str:
-    """Resolve HA entity_id from params.
-
-    Orion sends ``external_id`` (the HA entity_id) for worker-driven
-    actions, while dashboard actions send ``device_id`` (Staykey internal
-    UUID that needs a device_map lookup).  Accept both conventions.
-    """
-    external_id = params.get("external_id", "")
-    if external_id:
-        return external_id
-
-    device_id = params.get("device_id", "")
-    entity_id = device_map.get_entity_id(device_id)
-    if entity_id:
-        return entity_id
-
-    raise ValueError(
-        f"Cannot resolve entity: device_id={device_id!r}, external_id={external_id!r}"
-    )
-
-
-async def _handle_set_access_code(
-    hass: HomeAssistant,
-    device_map: DeviceMap,
-    params: Dict[str, Any],
-) -> Dict[str, Any]:
-    """Set access code with optional verification via Z-Wave readback."""
-    entity_id = _resolve_entity_id(device_map, params)
-
-    slot = params.get("slot") or params.get("code_slot")
-    code = params.get("code") or params.get("access_code")
-    verify = params.get("verify") if "verify" in params else params.get("validate", True)
-
-    if not slot or not code:
-        raise ValueError("slot/code_slot and code/access_code are required")
-
-    if verify:
-        return await zwave.set_and_verify_code(
-            hass, entity_id, slot=slot, code=str(code)
-        )
-
-    normalized = {**params, "device_id": params.get("device_id", ""), "slot": slot, "code": code}
-    return await lock.handle_set_access_code(hass, device_map, normalized)
-
-
-async def _handle_get_access_codes(
-    hass: HomeAssistant,
-    device_map: DeviceMap,
-    params: Dict[str, Any],
-) -> Dict[str, Any]:
-    """Read code slot contents from a lock."""
-    entity_id = _resolve_entity_id(device_map, params)
-
-    max_slots = params.get("max_slots", 30)
-    slots = await zwave.read_code_slots(hass, entity_id, max_slots=max_slots)
-    return {"slots": slots}
-
-
 async def _handle_list_entities(
     hass: HomeAssistant,
     params: Dict[str, Any],
 ) -> list:
-    """List entities in the format expected by the Orion list_ha_entities endpoint.
+    """Flatten discovered devices for list_entities consumers.
 
-    Calls discover_devices internally and reformats the response to match the
-    flat array format that Nimbus expects (entity_id, friendly_name, type, etc.).
+    Wraps ``discover_devices`` and returns the flat array of entities the
+    Staykey host API expects (entity id, friendly name, type, etc.).
     """
     result = await device_discovery.handle_discover_devices(hass, params)
     devices = result.get("devices", [])

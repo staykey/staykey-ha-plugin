@@ -1,3 +1,94 @@
+## [1.6.0-beta.13](https://github.com/staykey/staykey-ha-plugin/compare/v1.6.0-beta.12...v1.6.0-beta.13) (2026-05-07)
+
+
+### Features
+
+* **staykey:** enhance Matter lock capability handling and documentation ([6d836cf](https://github.com/staykey/staykey-ha-plugin/commit/6d836cf6a64ee26911bbc678804e05164aa8118b))
+
+## [1.6.0-beta.12](https://github.com/staykey/staykey-ha-plugin/compare/v1.6.0-beta.11...v1.6.0-beta.12) (2026-05-07)
+
+
+### Features
+
+* **staykey:** remove max_users and max_credentials_per_user from capability handling ([6e6aeb4](https://github.com/staykey/staykey-ha-plugin/commit/6e6aeb4f44fc21523420fdad3f15ecefc0499b1e))
+
+## [1.6.0-beta.11](https://github.com/staykey/staykey-ha-plugin/compare/v1.6.0-beta.10...v1.6.0-beta.11) (2026-05-07)
+
+
+### Bug Fixes
+
+* **staykey:** simplify SetCredential logic for Matter locks ([c6d4b25](https://github.com/staykey/staykey-ha-plugin/commit/c6d4b25d69132bec438dcc796c50fb25b00208a2))
+
+## [1.6.0-beta.10](https://github.com/staykey/staykey-ha-plugin/compare/v1.6.0-beta.9...v1.6.0-beta.10) (2026-05-07)
+
+
+### Bug Fixes
+
+* **staykey:** omit user_status from Matter SetCredential add payload ([397f13e](https://github.com/staykey/staykey-ha-plugin/commit/397f13e67a99160f87348cffcdfe97f36e8c3400))
+
+## [1.6.0-beta.9](https://github.com/staykey/staykey-ha-plugin/compare/v1.6.0-beta.8...v1.6.0-beta.9) (2026-05-06)
+
+
+### Features
+
+* **staykey:** enhance user status handling for lock credential management ([474f3a9](https://github.com/staykey/staykey-ha-plugin/commit/474f3a9a404cdacdb5565134cdcd3835657c40bd))
+
+## [1.6.0-beta.8](https://github.com/staykey/staykey-ha-plugin/compare/v1.6.0-beta.7...v1.6.0-beta.8) (2026-05-06)
+
+
+### Features
+
+* **staykey:** add tap_events action to handle event taps ([5e2c33a](https://github.com/staykey/staykey-ha-plugin/commit/5e2c33ac05ec5570b316ca2033069d0486ea0bba))
+
+## [1.6.0-beta.7](https://github.com/staykey/staykey-ha-plugin/compare/v1.6.0-beta.6...v1.6.0-beta.7) (2026-05-06)
+
+
+### Bug Fixes
+
+* **staykey:** improve PIN slot capacity calculation and documentation ([e567a3c](https://github.com/staykey/staykey-ha-plugin/commit/e567a3cdc8701ba4aae4d8b5bc65d6f2280aed21))
+
+## [1.6.0-beta.6](https://github.com/staykey/staykey-ha-plugin/compare/v1.6.0-beta.5...v1.6.0-beta.6) (2026-05-06)
+
+
+### Features
+
+* **staykey:** enhance capability info with max users and credentials ([5feee78](https://github.com/staykey/staykey-ha-plugin/commit/5feee78f4b1cb79a06a84258cdb196d913d81bd8))
+
+## [1.6.0-beta.5](https://github.com/staykey/staykey-ha-plugin/compare/v1.6.0-beta.4...v1.6.0-beta.5) (2026-05-06)
+
+
+### Features
+
+* **staykey:** add matter capacity awareness and ha_service_call passthrough ([06b9fcb](https://github.com/staykey/staykey-ha-plugin/commit/06b9fcb7292c35f39b4ebf79dae7f7786fac8da3))
+
+## [1.6.0-beta.4](https://github.com/staykey/staykey-ha-plugin/compare/v1.6.0-beta.3...v1.6.0-beta.4) (2026-05-06)
+
+
+### Bug Fixes
+
+* **staykey:** refine credential handling for Matter locks ([dde9ee5](https://github.com/staykey/staykey-ha-plugin/commit/dde9ee5316cad7c482ac1f1292c05ce21c1fb4d1))
+
+## [1.6.0-beta.3](https://github.com/staykey/staykey-ha-plugin/compare/v1.6.0-beta.2...v1.6.0-beta.3) (2026-05-06)
+
+
+### Bug Fixes
+
+* **staykey:** correct handling of user status and type in SetCredential ([28b1045](https://github.com/staykey/staykey-ha-plugin/commit/28b104536dd3d4dffdf2e607144e03bc07ae68cc))
+
+## [1.6.0-beta.2](https://github.com/staykey/staykey-ha-plugin/compare/v1.6.0-beta.1...v1.6.0-beta.2) (2026-05-05)
+
+
+### Features
+
+* **staykey:** improve Matter lock credential handling and error reporting ([b46fbe6](https://github.com/staykey/staykey-ha-plugin/commit/b46fbe6ac841d8a493b04ed71cf20c0f5baf1052))
+
+## [1.6.0-beta.1](https://github.com/staykey/staykey-ha-plugin/compare/v1.5.0...v1.6.0-beta.1) (2026-05-05)
+
+
+### Features
+
+* **staykey:** enhance lock handling with protocol-specific providers ([eb432fe](https://github.com/staykey/staykey-ha-plugin/commit/eb432fed11665e9a32f96b24e5094cb41d79b130))
+
 ## [1.5.0](https://github.com/staykey/staykey-ha-plugin/compare/v1.4.0...v1.5.0) (2026-04-07)
 
 
@@ -100,7 +191,7 @@
 
 ### Features
 
-* **staykey:** add list_entities action to handle entity listing for Orion endpoint ([7f21cb0](https://github.com/staykey/staykey-ha-plugin/commit/7f21cb065d67885b7c8d8d445554e28daaf28fee))
+* **staykey:** add list_entities action to handle entity listing for the Staykey integration ([7f21cb0](https://github.com/staykey/staykey-ha-plugin/commit/7f21cb065d67885b7c8d8d445554e28daaf28fee))
 
 ## [1.3.0-beta.8](https://github.com/staykey/staykey-ha-plugin/compare/v1.3.0-beta.7...v1.3.0-beta.8) (2026-03-27)
 

@@ -1,6 +1,9 @@
 """Lock/unlock and access code command handlers.
 
-Translates Staykey-owned schemas to HA service calls.
+Translates Staykey-owned schemas to HA service calls.  Access-code
+operations are delegated to a protocol-specific
+:class:`LockProvider <..services.lock_provider.LockProvider>` selected
+from the device-registry identifiers behind the entity (Z-Wave, Matter, ...).
 """
 
 from __future__ import annotations
@@ -11,11 +14,13 @@ from typing import Any, Dict, Optional
 from homeassistant.core import HomeAssistant
 
 from ..device_map import DeviceMap
+from ..services import providers
+from ..services.lock_provider import ProviderResult, SlotInfo
 from .utils import ProgressFn, wait_for_state
 
 LOGGER = logging.getLogger(__name__)
 
-_LOCK_STATE_TIMEOUT = 15  # seconds — matches Orion backend
+_LOCK_STATE_TIMEOUT = 15  # seconds — aligned with Staykey API timeouts
 
 
 async def handle_lock(
@@ -36,10 +41,7 @@ async def handle_lock(
     status = await wait_for_state(
         hass, entity_id, "locked", _LOCK_STATE_TIMEOUT, progress_fn=progress_fn,
     )
-    return {
-        "state": status,
-        "method": "remote",
-    }
+    return {"state": status, "method": "remote"}
 
 
 async def handle_unlock(
@@ -64,10 +66,7 @@ async def handle_unlock(
     status = await wait_for_state(
         hass, entity_id, "unlocked", _LOCK_STATE_TIMEOUT, progress_fn=progress_fn,
     )
-    return {
-        "state": status,
-        "method": "remote",
-    }
+    return {"state": status, "method": "remote"}
 
 
 async def handle_set_access_code(
@@ -75,31 +74,13 @@ async def handle_set_access_code(
     device_map: DeviceMap,
     params: Dict[str, Any],
 ) -> Dict[str, Any]:
-    """Set an access code on a lock. Uses zwave_js service for Z-Wave locks."""
+    """Set an access code on a lock via the protocol-appropriate provider."""
     entity_id = _resolve_entity_id(device_map, params)
+    slot, code = _resolve_slot_and_code(params)
 
-    slot = params.get("slot") or params.get("code_slot")
-    code = params.get("code") or params.get("access_code")
-
-    if not slot or not code:
-        raise ValueError("slot/code_slot and code/access_code are required")
-
-    await hass.services.async_call(
-        "zwave_js",
-        "set_lock_usercode",
-        {
-            "entity_id": entity_id,
-            "code_slot": slot,
-            "usercode": str(code),
-        },
-        blocking=True,
-    )
-
-    return {
-        "slot": slot,
-        "verified": False,
-        "method": "zwave_set",
-    }
+    provider = providers.select_provider(hass, entity_id)
+    result = await provider.set_code(hass, entity_id, slot, str(code))
+    return _provider_result_to_dict(result)
 
 
 async def handle_clear_access_code(
@@ -107,28 +88,44 @@ async def handle_clear_access_code(
     device_map: DeviceMap,
     params: Dict[str, Any],
 ) -> Dict[str, Any]:
-    """Clear an access code from a lock."""
+    """Clear an access code from a lock via the protocol-appropriate provider."""
     entity_id = _resolve_entity_id(device_map, params)
+    slot = _resolve_slot(params)
 
-    slot = params.get("slot") or params.get("code_slot")
-    if not slot:
-        raise ValueError("slot/code_slot is required")
+    provider = providers.select_provider(hass, entity_id)
+    result = await provider.clear_code(hass, entity_id, slot)
 
-    await hass.services.async_call(
-        "zwave_js",
-        "clear_lock_usercode",
-        {
-            "entity_id": entity_id,
-            "code_slot": slot,
-        },
-        blocking=True,
-    )
+    out = _provider_result_to_dict(result)
+    out["cleared"] = result.error is None
+    return out
 
-    return {"slot": slot, "cleared": True}
+
+async def handle_read_codes(
+    hass: HomeAssistant,
+    device_map: DeviceMap,
+    params: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Read code slot contents from a lock via the protocol-appropriate provider."""
+    entity_id = _resolve_entity_id(device_map, params)
+    max_slots = int(params.get("max_slots", 30))
+
+    provider = providers.select_provider(hass, entity_id)
+    slots = await provider.read_codes(hass, entity_id, max_slots=max_slots)
+    return {"slots": [_slot_info_to_dict(s) for s in slots]}
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 
 def _resolve_entity_id(device_map: DeviceMap, params: Dict[str, Any]) -> str:
-    """Resolve HA entity_id from either ``external_id`` or ``device_id``."""
+    """Resolve HA entity_id from either ``external_id`` or ``device_id``.
+
+    Remote/API requests often send ``external_id`` (the HA ``entity_id``)
+    directly; others send ``device_id`` (a Staykey-side identifier resolved
+    via the device map). Accept both conventions.
+    """
     external_id = params.get("external_id", "")
     if external_id:
         return external_id
@@ -141,3 +138,51 @@ def _resolve_entity_id(device_map: DeviceMap, params: Dict[str, Any]) -> str:
     raise ValueError(
         f"Cannot resolve entity: device_id={device_id!r}, external_id={external_id!r}"
     )
+
+
+def _resolve_slot(params: Dict[str, Any]) -> int:
+    slot = params.get("slot") or params.get("code_slot")
+    if slot is None:
+        raise ValueError("slot/code_slot is required")
+    return int(slot)
+
+
+def _resolve_slot_and_code(params: Dict[str, Any]) -> tuple[int, str]:
+    code = params.get("code") or params.get("access_code")
+    if not code:
+        raise ValueError("code/access_code is required")
+    return _resolve_slot(params), str(code)
+
+
+def _provider_result_to_dict(result: ProviderResult) -> Dict[str, Any]:
+    out: Dict[str, Any] = {
+        "slot": result.slot,
+        "method": result.method,
+        "verified": result.verified,
+        "attempts": result.attempts,
+    }
+    if result.error:
+        out["error"] = result.error
+    if result.extra:
+        out["extra"] = result.extra
+
+    # Promote structured Matter fields so upstream consumers can classify
+    # failures from stable keys instead of parsing localized `error` text.
+    extra = result.extra or {}
+    matter_status = extra.get("matter_status")
+    if matter_status:
+        out["matter_status"] = matter_status
+
+    # Same for coarse-grained reasons (`slot_out_of_range`, etc.).
+    reason = extra.get("reason")
+    if reason:
+        out["reason"] = reason
+
+    return out
+
+
+def _slot_info_to_dict(info: SlotInfo) -> Dict[str, Any]:
+    out: Dict[str, Any] = {"slot": info.slot, "occupied": info.occupied}
+    if info.code is not None:
+        out["code"] = info.code
+    return out

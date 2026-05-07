@@ -11,6 +11,8 @@ from typing import Any, Dict, List
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 
+from ..lock_capability_heuristics import lock_supports_access_codes
+
 LOGGER = logging.getLogger(__name__)
 
 SUPPORTED_DOMAINS = {"lock", "climate", "light", "cover", "sensor", "switch"}
@@ -72,7 +74,9 @@ async def handle_discover_devices(
         state = hass.states.get(entry.entity_id)
         if state and state.attributes:
             entity_info["capabilities"] = _extract_capabilities(
-                entry.domain, state.attributes
+                entry.domain,
+                state.attributes,
+                protocol=entity_info.get("protocol"),
             )
 
         entities_out.append(entity_info)
@@ -98,14 +102,14 @@ def _infer_protocol(device: Any) -> str | None:
     return None
 
 
-def _extract_capabilities(domain: str, attributes: dict) -> list[str]:
+def _extract_capabilities(
+    domain: str, attributes: dict, protocol: str | None = None
+) -> list[str]:
     caps: list[str] = []
     if domain == "lock":
         caps.extend(["lock", "unlock"])
-        if "supported_features" in attributes:
-            features = attributes["supported_features"]
-            if isinstance(features, int) and features & 1:
-                caps.append("access_codes")
+        if lock_supports_access_codes(attributes, protocol):
+            caps.append("access_codes")
     elif domain == "climate":
         caps.extend(["set_temperature", "set_hvac_mode"])
     elif domain == "light":

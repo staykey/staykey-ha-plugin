@@ -1,6 +1,10 @@
 """Device capability discovery handler.
 
-Inspects Z-Wave nodes for supported command classes, code slot count, etc.
+For lock entities, capability is sourced from the protocol-specific
+:class:`LockProvider <..services.lock_provider.LockProvider>` so Matter
+locks (HA 2026.4 lock manager) report PIN support correctly.  For other
+domains we still expose Z-Wave node info when present, but without
+hard-failing on Matter / Wi-Fi / Zigbee devices.
 """
 
 from __future__ import annotations
@@ -11,7 +15,9 @@ from typing import Any, Dict
 from homeassistant.core import HomeAssistant
 
 from ..device_map import DeviceMap
-from ..services import zwave
+from ..services import providers
+from ..services.lock_provider import UnsupportedProtocolError
+from ..services.providers import zwave as zwave_provider
 
 LOGGER = logging.getLogger(__name__)
 
@@ -21,13 +27,28 @@ async def handle_get_capabilities(
     device_map: DeviceMap,
     params: Dict[str, Any],
 ) -> Dict[str, Any]:
-    """Get detailed capability information for a device."""
-    device_id = params.get("device_id", "")
-    entity_id = device_map.get_entity_id(device_id)
-    if not entity_id:
-        raise ValueError(f"Unknown device_id: {device_id}")
+    """Get detailed capability information for a device.
 
-    node_info = await zwave.get_node_info(hass, entity_id)
+    Accepts ``external_id`` (the HA ``entity_id``) **or** ``device_id``
+    (resolved through the device map). Matches the dual-key convention in
+    :mod:`..handlers.lock`.
+    """
+    external_id = params.get("external_id", "")
+    device_id = params.get("device_id", "")
+
+    entity_id: str
+    if external_id:
+        entity_id = external_id
+        if not device_id:
+            device_id = device_map.get_device_id(entity_id) or ""
+    else:
+        entity_id = device_map.get_entity_id(device_id) or ""
+        if not entity_id:
+            raise ValueError(
+                "get_capabilities: provide external_id (entity_id) or a "
+                f"device_id known to the device map; got "
+                f"device_id={device_id!r}"
+            )
 
     capabilities: Dict[str, Any] = {
         "device_id": device_id,
@@ -46,6 +67,27 @@ async def handle_get_capabilities(
         if "device_class" in attrs:
             capabilities["device_class"] = attrs["device_class"]
 
+    if entity_id.startswith("lock."):
+        try:
+            provider = providers.select_provider(hass, entity_id)
+            caps = await provider.get_capabilities(hass, entity_id)
+            capabilities["protocol"] = provider.name
+            capabilities["supports_access_codes"] = caps.supports_access_codes
+            if caps.max_slots is not None:
+                capabilities["max_slots"] = caps.max_slots
+            if caps.extra:
+                capabilities[provider.name] = caps.extra
+            return capabilities
+        except UnsupportedProtocolError:
+            LOGGER.debug(
+                "No LockProvider for %s; falling back to legacy zwave info",
+                entity_id,
+            )
+
+    # Non-lock domains, or locks on integrations we don't have a provider
+    # for: best-effort Z-Wave node lookup (returns None on Matter / Wi-Fi
+    # / Zigbee devices, which is fine).
+    node_info = await zwave_provider.get_node_info(hass, entity_id)
     if node_info:
         capabilities["zwave"] = node_info
 
