@@ -26,6 +26,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # Use an admin-owned PAT so semantic-release can push the
+          # chore(release) commit + tag to the protected main branch
+          # (the admin identity is on the branch-protection bypass list).
+          # See docs/maintainer-runbook.md for how to create this secret.
+          token: ${{ secrets.RELEASE_TOKEN }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -38,6 +43,9 @@ jobs:
 
       - name: Run semantic-release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Admin-owned PAT (RELEASE_TOKEN) so the release commit/tag can be
+          # pushed past branch protection; falls back to the default token if
+          # the secret is unset (e.g. forks), where protection does not apply.
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
         run: npx semantic-release
 

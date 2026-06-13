@@ -41,19 +41,21 @@ Prerelease branches let you ship a testable build to HACS testers without affect
 
 `main` is protected: changes require a pull request and passing CI, merges are squashed, and merged branches are auto-deleted.
 
-The release job creates a commit and a tag and pushes them **to the protected `main` branch**. It does this as **github-actions[bot]**, authenticating with the default `GITHUB_TOKEN` that GitHub injects into the workflow (see the `Run semantic-release` step in `release.yml`). That `github-actions[bot]` identity is on the **bypass list of the branch-protection ruleset**, so the automated `chore(release): … [skip ci]` commit and the release tag are allowed through without a PR. The `[skip ci]` marker prevents the release commit from re-triggering the workflow.
+The release job creates a commit and a tag and pushes them **to the protected `main` branch** (the `chore(release): … [skip ci]` commit and the release tag). This is the only path that writes directly to `main`; everything else goes through a reviewed, CI-gated PR. The `[skip ci]` marker stops the release commit from re-triggering the workflow.
 
-This is the only path that writes directly to `main`. Everything else goes through a reviewed, CI-gated PR.
+To get that push past branch protection, `release.yml` authenticates with an **admin-owned personal access token** stored as the repository secret **`RELEASE_TOKEN`** (used both by the `Checkout` step's `token:` and the `Run semantic-release` step's `GITHUB_TOKEN`). Because the token's owner is a repository admin and the **Repository admin** role is on the ruleset **bypass list**, the release push is allowed through without a PR.
 
-### Fallback: if a release push is ever rejected by protection
+Why a PAT rather than the default `GITHUB_TOKEN` / `github-actions[bot]`: GitHub only lets you grant the **GitHub Actions** integration a ruleset bypass at the **organization** level, not on a repository-level ruleset, so the default token cannot be bypassed here. The admin PAT is the supported path for a repo-level ruleset.
 
-If branch protection ever blocks the release push (for example, the default token loses its bypass, or you tighten the ruleset and forget to re-add the bot):
+### Required setup: the `RELEASE_TOKEN` secret
 
-1. Create a **fine-grained personal access token** (or a GitHub App installation token) owned by a repository admin, scoped to this repository with **`contents: write`** permission.
-2. Store it as a repository secret with the name that `release.yml` reads (update the `GITHUB_TOKEN` env in the `Run semantic-release` step to point at the new secret, e.g. `secrets.RELEASE_TOKEN`).
-3. Ensure that token's identity is on the branch-protection ruleset **bypass list**, exactly as `github-actions[bot]` is today.
+Releases will fail to push until this secret exists. To (re)create it:
 
-Prefer the default `GITHUB_TOKEN` + bot bypass while it works; the PAT/App path is only a contingency because tokens expire and need rotation.
+1. Create a **fine-grained personal access token** owned by a repository admin: GitHub → **Settings → Developer settings → Fine-grained tokens**. Scope it to **this repository only**, with **Repository permissions → Contents: Read and write**. Set a calendar reminder to rotate it before it expires.
+2. Add it as a repository secret named **`RELEASE_TOKEN`**: repo **Settings → Secrets and variables → Actions → New repository secret** (or `gh secret set RELEASE_TOKEN`).
+3. Confirm the token owner (a repo admin) is on the branch-protection ruleset **bypass list** (it is, via the Repository admin role).
+
+Alternatively, an org owner can grant the **GitHub Actions** integration a bypass on an **organization-level** ruleset; then the default `GITHUB_TOKEN` works and no PAT is needed. `release.yml` falls back to `GITHUB_TOKEN` automatically when `RELEASE_TOKEN` is unset.
 
 ## Cutting a release
 
