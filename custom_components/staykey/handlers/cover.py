@@ -34,7 +34,11 @@ async def handle_open_cover(
     )
 
     status = await wait_for_state(
-        hass, entity_id, "open", _COVER_STATE_TIMEOUT, progress_fn=progress_fn,
+        hass,
+        entity_id,
+        "open",
+        _COVER_STATE_TIMEOUT,
+        progress_fn=progress_fn,
     )
     return {
         "entity_id": entity_id,
@@ -59,7 +63,11 @@ async def handle_close_cover(
     )
 
     status = await wait_for_state(
-        hass, entity_id, "closed", _COVER_STATE_TIMEOUT, progress_fn=progress_fn,
+        hass,
+        entity_id,
+        "closed",
+        _COVER_STATE_TIMEOUT,
+        progress_fn=progress_fn,
     )
     return {
         "entity_id": entity_id,

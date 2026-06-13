@@ -63,7 +63,9 @@ class EventQueue:
                 break
 
         if sent > 0:
-            LOGGER.info("Drained %d queued events (%d remaining)", sent, len(self._queue))
+            LOGGER.info(
+                "Drained %d queued events (%d remaining)", sent, len(self._queue)
+            )
 
         self._dropped = 0
         return sent

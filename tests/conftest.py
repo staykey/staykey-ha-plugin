@@ -82,9 +82,7 @@ sys.modules["homeassistant.exceptions"].HomeAssistantError = _HomeAssistantError
 
 def _async_get(_):  # noqa: D401 - stub function
     """Stand-in for the HA registry async_get accessors."""
-    raise RuntimeError(
-        "homeassistant.helpers.*_registry.async_get is stubbed in tests"
-    )
+    raise RuntimeError("homeassistant.helpers.*_registry.async_get is stubbed in tests")
 
 
 sys.modules["homeassistant.helpers.device_registry"].async_get = _async_get

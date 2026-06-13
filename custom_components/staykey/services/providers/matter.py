@@ -88,6 +88,7 @@ def _get_entity_lock(entity_id: str) -> asyncio.Lock:
         _ENTITY_LOCKS[entity_id] = lock
     return lock
 
+
 _MATTER_DOMAIN = "matter"
 _PIN = "pin"
 
@@ -190,7 +191,9 @@ class MatterLockProvider:
                     "preflight_error": str(exc.original or exc),
                 },
             )
-            _log_set_outcome(entity_id, slot, code, "preflight", started_at, result, exc=exc.original)
+            _log_set_outcome(
+                entity_id, slot, code, "preflight", started_at, result, exc=exc.original
+            )
             return result
 
         is_modify = bool(existing and existing.get("credential_exists"))
@@ -539,9 +542,8 @@ class MatterLockProvider:
         if not info:
             return CapabilityInfo(supports_access_codes=False)
 
-        supports = (
-            bool(info.get("supports_user_management"))
-            and _PIN in (info.get("supported_credential_types") or [])
+        supports = bool(info.get("supports_user_management")) and _PIN in (
+            info.get("supported_credential_types") or []
         )
         return CapabilityInfo(
             supports_access_codes=supports,
@@ -576,7 +578,10 @@ def _is_duplicate_credential_error(exc: BaseException) -> bool:
     helper class shape changes between HA releases.
     """
     placeholders = getattr(exc, "translation_placeholders", None)
-    if isinstance(placeholders, dict) and placeholders.get("status") == _DUPLICATE_STATUS:
+    if (
+        isinstance(placeholders, dict)
+        and placeholders.get("status") == _DUPLICATE_STATUS
+    ):
         return True
 
     return _DUPLICATE_STATUS in str(exc).lower()
@@ -816,9 +821,7 @@ async def _get_credential_status(
     return _extract_entity_response(response, entity_id)
 
 
-async def _get_lock_info(
-    hass: HomeAssistant, entity_id: str
-) -> dict[str, Any] | None:
+async def _get_lock_info(hass: HomeAssistant, entity_id: str) -> dict[str, Any] | None:
     try:
         response = await hass.services.async_call(
             _MATTER_DOMAIN,
@@ -828,9 +831,7 @@ async def _get_lock_info(
             return_response=True,
         )
     except Exception:
-        LOGGER.warning(
-            "matter.get_lock_info failed for %s", entity_id, exc_info=True
-        )
+        LOGGER.warning("matter.get_lock_info failed for %s", entity_id, exc_info=True)
         return None
     return _extract_entity_response(response, entity_id)
 

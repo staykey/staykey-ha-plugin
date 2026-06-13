@@ -12,9 +12,7 @@ from homeassistant.helpers import entity_registry as er
 LOGGER = logging.getLogger(__name__)
 
 
-def resolve_entity_by_unique_id(
-    hass: HomeAssistant, unique_id: str
-) -> str | None:
+def resolve_entity_by_unique_id(hass: HomeAssistant, unique_id: str) -> str | None:
     """Look up an entity_id by its unique_id in the entity registry."""
     entity_reg = er.async_get(hass)
     for entry in entity_reg.entities.values():
@@ -42,9 +40,7 @@ def resolve_device_by_identifiers(
     return None
 
 
-def get_entity_details(
-    hass: HomeAssistant, entity_id: str
-) -> dict[str, Any] | None:
+def get_entity_details(hass: HomeAssistant, entity_id: str) -> dict[str, Any] | None:
     """Get full entity registry details for a given entity_id."""
     entity_reg = er.async_get(hass)
     entry = entity_reg.async_get(entity_id)

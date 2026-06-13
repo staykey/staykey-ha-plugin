@@ -23,8 +23,7 @@ def _ev(event_type: str, data, origin="LOCAL", time_fired=None, ctx=None):
         data=data,
         origin=SimpleNamespace(value=origin) if isinstance(origin, str) else origin,
         time_fired=time_fired or dt.datetime(2026, 5, 6, 5, 30, tzinfo=dt.timezone.utc),
-        context=ctx
-        or SimpleNamespace(id="ctx-1", user_id=None, parent_id=None),
+        context=ctx or SimpleNamespace(id="ctx-1", user_id=None, parent_id=None),
     )
 
 

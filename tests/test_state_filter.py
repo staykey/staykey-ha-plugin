@@ -4,7 +4,9 @@ import sys
 from pathlib import Path
 
 # Import state_filter directly to avoid pulling in HA-dependent __init__.py
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "custom_components" / "staykey"))
+sys.path.insert(
+    0, str(Path(__file__).resolve().parents[1] / "custom_components" / "staykey")
+)
 from state_filter import COVER_TERMINAL_STATES, should_forward_state  # noqa: E402
 
 

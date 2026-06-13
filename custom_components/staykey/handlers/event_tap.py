@@ -190,7 +190,9 @@ def _coerce_event_types(value: Any) -> list[str] | None:
     out: list[str] = []
     for item in value:
         if not isinstance(item, str) or not item:
-            raise ValueError("tap_events: 'event_types' entries must be non-empty strings")
+            raise ValueError(
+                "tap_events: 'event_types' entries must be non-empty strings"
+            )
         out.append(item)
     if not out:
         return None

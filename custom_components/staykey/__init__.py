@@ -60,14 +60,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         options.get(CONF_GATEWAY_TOKEN) or data.get(CONF_GATEWAY_TOKEN) or ""
     )
     gateway_url: str = (
-        options.get(CONF_GATEWAY_URL) or data.get(CONF_GATEWAY_URL) or DEFAULT_GATEWAY_URL
+        options.get(CONF_GATEWAY_URL)
+        or data.get(CONF_GATEWAY_URL)
+        or DEFAULT_GATEWAY_URL
     )
     endpoint_url: str = (
         options.get(CONF_ENDPOINT_URL) or data.get(CONF_ENDPOINT_URL) or ""
     )
 
     if not gateway_token and not endpoint_url:
-        LOGGER.error("Staykey missing both gateway token and webhook URL; aborting setup")
+        LOGGER.error(
+            "Staykey missing both gateway token and webhook URL; aborting setup"
+        )
         return False
 
     verify_ssl: bool = options.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL)
@@ -156,7 +160,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             if action == "update":
                 old_entity_id = event.data.get("old_entity_id")
                 new_entity_id = event.data.get("entity_id")
-                if old_entity_id and new_entity_id and device_map.is_tracked(old_entity_id):
+                if (
+                    old_entity_id
+                    and new_entity_id
+                    and device_map.is_tracked(old_entity_id)
+                ):
                     sk_device_id = device_map.get_device_id(old_entity_id)
                     if sk_device_id:
                         device_map.update_entity_id(
@@ -325,7 +333,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         entity_reg, device_id, include_disabled_entities=False
                     )
                     lock_entities = [e for e in ents if e.domain == "lock"]
-                    chosen = lock_entities[0] if lock_entities else (ents[0] if ents else None)
+                    chosen = (
+                        lock_entities[0]
+                        if lock_entities
+                        else (ents[0] if ents else None)
+                    )
                     if chosen:
                         entity_id = chosen.entity_id
 
@@ -348,13 +360,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 },
                 "plugin": {
                     "version": plugin_version,
-                    "instance_url": hass.config.external_url or hass.config.internal_url,
+                    "instance_url": hass.config.external_url
+                    or hass.config.internal_url,
                 },
                 "ha": {
                     "event_type": event.event_type,
                     "event_label": d.get("event_label"),
                     "node_id": d.get("node_id"),
-                    "command_class_name": d.get("command_class_name") or d.get("command_class"),
+                    "command_class_name": d.get("command_class_name")
+                    or d.get("command_class"),
                     "origin": origin,
                 },
             }
@@ -390,7 +404,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     entity_reg, ha_device_id, include_disabled_entities=False
                 )
                 lock_entities = [e for e in ents if e.domain == "lock"]
-                chosen = lock_entities[0] if lock_entities else (ents[0] if ents else None)
+                chosen = (
+                    lock_entities[0] if lock_entities else (ents[0] if ents else None)
+                )
                 if chosen:
                     entity_id = chosen.entity_id
                     sk_device_id = device_map.get_device_id(entity_id)
@@ -400,9 +416,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
             params = d.get("parameters") or {}
             code_slot = (
-                params.get("codeId")
-                or params.get("userId")
-                or d.get("code_slot")
+                params.get("codeId") or params.get("userId") or d.get("code_slot")
             )
             evt_id = d.get("event")
             if evt_id in (1, 2):

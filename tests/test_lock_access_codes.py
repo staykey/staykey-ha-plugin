@@ -88,23 +88,22 @@ def test_lock_supports_access_codes_matter_requires_pin_signal():
     from lock_capability_heuristics import lock_supports_access_codes
 
     assert (
-        lock_supports_access_codes(
-            {"supported_credential_types": ["pin"]}, "matter"
-        )
+        lock_supports_access_codes({"supported_credential_types": ["pin"]}, "matter")
         is True
     )
     assert lock_supports_access_codes({"max_pin_users": 10}, "matter") is True
     assert lock_supports_access_codes({"max_users": 10}, "matter") is True
     assert (
-        lock_supports_access_codes({"supports_user_management": True}, "matter")
-        is True
+        lock_supports_access_codes({"supports_user_management": True}, "matter") is True
     )
 
     # Conservative default: no PIN signals -> no access codes.
     assert lock_supports_access_codes({"supported_features": 1}, "matter") is False
     assert lock_supports_access_codes({}, "matter") is False
     assert (
-        lock_supports_access_codes({"supported_credential_types": ["fingerprint"]}, "matter")
+        lock_supports_access_codes(
+            {"supported_credential_types": ["fingerprint"]}, "matter"
+        )
         is False
     )
 
@@ -285,9 +284,7 @@ def test_matter_set_code_preflight_none_payload_takes_add_path():
     from services.providers.matter import MatterLockProvider
 
     hass = _FakeHass()
-    hass.services.register(
-        "matter", "get_lock_credential_status", lambda _data: None
-    )
+    hass.services.register("matter", "get_lock_credential_status", lambda _data: None)
 
     hass.services.register(
         "matter",
@@ -346,8 +343,7 @@ def test_matter_set_code_add_path_passes_user_type_and_omits_user_index():
     assert set_data["credential_index"] == 7
     assert set_data["credential_data"] == "1234"
     assert set_data.get("user_type") == "unrestricted_user", (
-        "Add path must send user_type so the lock auto-creates a "
-        "non-restricted user"
+        "Add path must send user_type so the lock auto-creates a non-restricted user"
     )
     assert "user_index" not in set_data, (
         "Add path must omit user_index (null on the wire) so the lock "
@@ -400,8 +396,7 @@ def test_matter_set_code_modify_path_passes_existing_user_index_and_omits_user_t
     set_data = set_call[2]
     assert set_data["credential_index"] == 7
     assert set_data["user_index"] == 42, (
-        "Modify path must send the existing user_index from "
-        "get_lock_credential_status"
+        "Modify path must send the existing user_index from get_lock_credential_status"
     )
     assert "user_type" not in set_data, (
         "user_type must be omitted on Modify; chip SDK validity check "
@@ -726,9 +721,7 @@ def test_matter_clear_code_falls_back_to_clear_credential_for_orphan():
     provider = MatterLockProvider()
     result = _run(provider.clear_code(hass, "lock.front_door", 7))
 
-    clear_call = next(
-        c for c in hass.services.calls if c[1] == "clear_lock_credential"
-    )
+    clear_call = next(c for c in hass.services.calls if c[1] == "clear_lock_credential")
     assert clear_call[2]["credential_index"] == 7
     assert clear_call[2]["credential_type"] == "pin"
     assert result.verified is True

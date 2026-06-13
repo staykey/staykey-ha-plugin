@@ -96,5 +96,8 @@ async def handle_set_hvac_mode(
 
     state = hass.states.get(entity_id)
     return _build_climate_result(
-        state, entity_id, "set_hvac_mode", hvac_mode=hvac_mode,
+        state,
+        entity_id,
+        "set_hvac_mode",
+        hvac_mode=hvac_mode,
     )

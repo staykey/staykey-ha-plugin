@@ -39,7 +39,11 @@ async def handle_lock(
     )
 
     status = await wait_for_state(
-        hass, entity_id, "locked", _LOCK_STATE_TIMEOUT, progress_fn=progress_fn,
+        hass,
+        entity_id,
+        "locked",
+        _LOCK_STATE_TIMEOUT,
+        progress_fn=progress_fn,
     )
     return {"state": status, "method": "remote"}
 
@@ -59,12 +63,14 @@ async def handle_unlock(
     if code := params.get("code"):
         service_data["code"] = code
 
-    await hass.services.async_call(
-        "lock", "unlock", service_data, blocking=True
-    )
+    await hass.services.async_call("lock", "unlock", service_data, blocking=True)
 
     status = await wait_for_state(
-        hass, entity_id, "unlocked", _LOCK_STATE_TIMEOUT, progress_fn=progress_fn,
+        hass,
+        entity_id,
+        "unlocked",
+        _LOCK_STATE_TIMEOUT,
+        progress_fn=progress_fn,
     )
     return {"state": status, "method": "remote"}
 

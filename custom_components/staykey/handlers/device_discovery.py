@@ -120,4 +120,3 @@ def _extract_capabilities(
     elif domain == "switch":
         caps.append("toggle")
     return caps
-

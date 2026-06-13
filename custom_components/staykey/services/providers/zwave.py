@@ -94,9 +94,7 @@ class ZwaveLockProvider:
 # ---------------------------------------------------------------------------
 
 
-def _get_zwave_node_for_entity(
-    hass: HomeAssistant, entity_id: str
-) -> Any | None:
+def _get_zwave_node_for_entity(hass: HomeAssistant, entity_id: str) -> Any | None:
     """Look up the Z-Wave node associated with a HA entity via the device registry."""
     try:
         entity_reg = er.async_get(hass)
@@ -231,9 +229,7 @@ async def _fetch_code_slot(
         return None
 
 
-async def get_node_info(
-    hass: HomeAssistant, entity_id: str
-) -> dict[str, Any] | None:
+async def get_node_info(hass: HomeAssistant, entity_id: str) -> dict[str, Any] | None:
     """Get Z-Wave node information for capability discovery.
 
     Public helper used by ``handlers/diagnostics.py`` and the legacy
@@ -336,11 +332,7 @@ async def _set_and_verify_code(
             await asyncio.sleep(verify_delay_s)
 
             result = await _fetch_code_slot(hass, entity_id, slot)
-            if (
-                result
-                and result.get("occupied")
-                and result.get("code") == str(code)
-            ):
+            if result and result.get("occupied") and result.get("code") == str(code):
                 return ProviderResult(
                     slot=slot,
                     method="zwave_set_and_verify",

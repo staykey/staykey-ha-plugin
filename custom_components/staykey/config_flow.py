@@ -22,8 +22,9 @@ from .const import (
 
 
 class StaykeyOptionsFlowHandler(config_entries.OptionsFlow):
-
-    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
@@ -35,17 +36,24 @@ class StaykeyOptionsFlowHandler(config_entries.OptionsFlow):
             {
                 vol.Optional(
                     CONF_GATEWAY_TOKEN,
-                    default=options.get(CONF_GATEWAY_TOKEN, data.get(CONF_GATEWAY_TOKEN, "")),
+                    default=options.get(
+                        CONF_GATEWAY_TOKEN, data.get(CONF_GATEWAY_TOKEN, "")
+                    ),
                 ): str,
                 vol.Optional(
                     CONF_GATEWAY_URL,
-                    default=options.get(CONF_GATEWAY_URL, data.get(CONF_GATEWAY_URL, DEFAULT_GATEWAY_URL)),
+                    default=options.get(
+                        CONF_GATEWAY_URL,
+                        data.get(CONF_GATEWAY_URL, DEFAULT_GATEWAY_URL),
+                    ),
                 ): str,
                 vol.Optional(
-                    CONF_VERIFY_SSL, default=options.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL)
+                    CONF_VERIFY_SSL,
+                    default=options.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
                 ): bool,
                 vol.Optional(
-                    CONF_TIMEOUT, default=options.get(CONF_TIMEOUT, DEFAULT_TIMEOUT_SECONDS)
+                    CONF_TIMEOUT,
+                    default=options.get(CONF_TIMEOUT, DEFAULT_TIMEOUT_SECONDS),
                 ): int,
                 vol.Optional(
                     CONF_ENDPOINT_URL,
@@ -70,7 +78,9 @@ class StaykeyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> StaykeyOptionsFlowHandler:
         return StaykeyOptionsFlowHandler()
 
-    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -92,7 +102,9 @@ class StaykeyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Optional(CONF_ENDPOINT_URL, default=""): str,
             }
         )
-        return self.async_show_form(step_id="user", data_schema=data_schema, errors=errors)
+        return self.async_show_form(
+            step_id="user", data_schema=data_schema, errors=errors
+        )
 
     async def async_step_import(self, user_input: dict[str, Any]) -> FlowResult:
         return await self.async_step_user(user_input)

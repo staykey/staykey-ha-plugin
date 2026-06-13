@@ -65,33 +65,39 @@ def event_push_message(
     event_type: str,
     data: dict[str, Any],
 ) -> str:
-    return encode({
-        "type": "event_push",
-        "event_type": event_type,
-        "data": data,
-    })
+    return encode(
+        {
+            "type": "event_push",
+            "event_type": event_type,
+            "data": data,
+        }
+    )
 
 
 def state_update_message(
     device_id: str,
     data: dict[str, Any],
 ) -> str:
-    return encode({
-        "type": "state_update",
-        "device_id": device_id,
-        "data": data,
-    })
+    return encode(
+        {
+            "type": "state_update",
+            "device_id": device_id,
+            "data": data,
+        }
+    )
 
 
 def health_alert_message(
     alert_type: str,
     data: dict[str, Any],
 ) -> str:
-    return encode({
-        "type": "health_alert",
-        "alert_type": alert_type,
-        "data": data,
-    })
+    return encode(
+        {
+            "type": "health_alert",
+            "alert_type": alert_type,
+            "data": data,
+        }
+    )
 
 
 def entity_id_changed_message(
@@ -99,21 +105,25 @@ def entity_id_changed_message(
     old_external_id: str,
     new_external_id: str,
 ) -> str:
-    return encode({
-        "type": "entity_id_changed",
-        "device_id": device_id,
-        "old_external_id": old_external_id,
-        "new_external_id": new_external_id,
-    })
+    return encode(
+        {
+            "type": "entity_id_changed",
+            "device_id": device_id,
+            "old_external_id": old_external_id,
+            "new_external_id": new_external_id,
+        }
+    )
 
 
 def progress_message(request_id: str, current_state: str) -> str:
     """Signal the gateway that a long-running request is still in progress."""
-    return encode({
-        "type": "progress",
-        "id": request_id,
-        "state": current_state,
-    })
+    return encode(
+        {
+            "type": "progress",
+            "id": request_id,
+            "state": current_state,
+        }
+    )
 
 
 def pong_message() -> str:

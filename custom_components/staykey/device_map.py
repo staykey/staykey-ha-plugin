@@ -40,18 +40,31 @@ class DeviceMap:
 
         LOGGER.info("Device map synced: %d devices tracked", len(self._forward))
 
-    def apply_update(self, action: str, device: dict[str, Any] | None = None, device_id: str | None = None) -> None:
+    def apply_update(
+        self,
+        action: str,
+        device: dict[str, Any] | None = None,
+        device_id: str | None = None,
+    ) -> None:
         """Apply an incremental device_map_update."""
         if action == "add" and device:
             self._add_device(device)
-            LOGGER.info("Device added to map: %s -> %s", device.get("device_id"), device.get("external_id"))
+            LOGGER.info(
+                "Device added to map: %s -> %s",
+                device.get("device_id"),
+                device.get("external_id"),
+            )
         elif action == "remove" and device_id:
             self._remove_device(device_id)
             LOGGER.info("Device removed from map: %s", device_id)
         elif action == "update" and device:
             self._remove_device(device["device_id"])
             self._add_device(device)
-            LOGGER.info("Device updated in map: %s -> %s", device.get("device_id"), device.get("external_id"))
+            LOGGER.info(
+                "Device updated in map: %s -> %s",
+                device.get("device_id"),
+                device.get("external_id"),
+            )
 
     def get_entity_id(self, device_id: str) -> str | None:
         """Look up HA entity_id by Staykey device_id (for command translation)."""
@@ -68,7 +81,9 @@ class DeviceMap:
     def get_device_by_unique_id(self, unique_id: str) -> str | None:
         return self._unique_id_index.get(unique_id)
 
-    def update_entity_id(self, device_id: str, old_entity_id: str, new_entity_id: str) -> None:
+    def update_entity_id(
+        self, device_id: str, old_entity_id: str, new_entity_id: str
+    ) -> None:
         """Handle entity_id rename: update both maps."""
         info = self._forward.get(device_id)
         if info:
@@ -114,7 +129,9 @@ def _identifiers_key(identifiers: Any) -> str | None:
     """Convert device_identifiers to a hashable key for indexing."""
     if isinstance(identifiers, list):
         try:
-            return str(sorted(tuple(i) if isinstance(i, list) else i for i in identifiers))
+            return str(
+                sorted(tuple(i) if isinstance(i, list) else i for i in identifiers)
+            )
         except TypeError:
             return str(identifiers)
     return str(identifiers) if identifiers else None

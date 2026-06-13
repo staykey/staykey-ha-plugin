@@ -117,9 +117,7 @@ class GatewayClient:
     async def send_entity_id_changed(
         self, device_id: str, old_id: str, new_id: str
     ) -> None:
-        await self.send(
-            protocol.entity_id_changed_message(device_id, old_id, new_id)
-        )
+        await self.send(protocol.entity_id_changed_message(device_id, old_id, new_id))
 
     async def _connection_loop(self) -> None:
         LOGGER.info("Gateway connection loop started")
@@ -135,7 +133,9 @@ class GatewayClient:
                     await self._listen()
                     LOGGER.info("Gateway listen loop ended, will reconnect")
                 else:
-                    LOGGER.warning("Gateway connection/auth failed, retrying in %ds", backoff)
+                    LOGGER.warning(
+                        "Gateway connection/auth failed, retrying in %ds", backoff
+                    )
             except asyncio.CancelledError:
                 LOGGER.info("Gateway connection loop cancelled")
                 raise
@@ -201,7 +201,11 @@ class GatewayClient:
         )
 
         property_name = response.get("property_name")
-        if property_name and self._config_entry and property_name != self._config_entry.title:
+        if (
+            property_name
+            and self._config_entry
+            and property_name != self._config_entry.title
+        ):
             self._hass.config_entries.async_update_entry(
                 self._config_entry, title=property_name
             )
@@ -289,7 +293,10 @@ class GatewayClient:
 
         try:
             result = await self._command_handler(
-                action, request_id, params, progress_fn,
+                action,
+                request_id,
+                params,
+                progress_fn,
             )
             await self.send(
                 protocol.response_message(request_id, status="ok", data=result)
