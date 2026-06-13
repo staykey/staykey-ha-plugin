@@ -29,8 +29,10 @@ jobs:
           # Use an admin-owned PAT so semantic-release can push the
           # chore(release) commit + tag to the protected main branch
           # (the admin identity is on the branch-protection bypass list).
+          # Falls back to the default token when RELEASE_TOKEN is unset, so
+          # non-releasing pushes (and forks) still check out cleanly.
           # See docs/maintainer-runbook.md for how to create this secret.
-          token: ${{ secrets.RELEASE_TOKEN }}
+          token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
