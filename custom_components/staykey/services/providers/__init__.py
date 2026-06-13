@@ -10,10 +10,10 @@ device_registry and read ``device.identifiers`` (the same source
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 
 from ..lock_provider import LockProvider, UnsupportedProtocolError
 from . import matter as matter_provider
@@ -52,7 +52,7 @@ def select_provider(hass: HomeAssistant, entity_id: str) -> LockProvider:
     return provider
 
 
-def _infer_integration(hass: HomeAssistant, entity_id: str) -> Optional[str]:
+def _infer_integration(hass: HomeAssistant, entity_id: str) -> str | None:
     """Return the leading identifier domain (e.g. 'zwave_js', 'matter')
     for the device backing *entity_id*, or None if it can't be resolved.
     """

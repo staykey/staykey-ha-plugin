@@ -134,7 +134,6 @@ def test_lock_supports_access_codes_unknown_protocol_falls_back_to_heuristic():
 
 def test_is_duplicate_credential_error_via_translation_placeholders():
     from homeassistant.exceptions import HomeAssistantError
-
     from services.providers.matter import _is_duplicate_credential_error
 
     exc = HomeAssistantError(
@@ -148,7 +147,6 @@ def test_is_duplicate_credential_error_via_translation_placeholders():
 
 def test_is_duplicate_credential_error_via_message_substring():
     from homeassistant.exceptions import HomeAssistantError
-
     from services.providers.matter import _is_duplicate_credential_error
 
     exc = HomeAssistantError(
@@ -159,7 +157,6 @@ def test_is_duplicate_credential_error_via_message_substring():
 
 def test_is_duplicate_credential_error_false_for_other_statuses():
     from homeassistant.exceptions import HomeAssistantError
-
     from services.providers.matter import _is_duplicate_credential_error
 
     exc = HomeAssistantError(
@@ -256,7 +253,6 @@ def test_matter_set_code_fails_safe_when_preflight_unavailable():
     failure as definitive rather than burning retries.
     """
     from homeassistant.exceptions import HomeAssistantError
-
     from services.providers.matter import MatterLockProvider
 
     hass = _FakeHass()
@@ -418,7 +414,6 @@ def test_matter_set_code_modify_path_passes_existing_user_index_and_omits_user_t
 
 def test_matter_set_code_treats_duplicate_status_as_verified():
     from homeassistant.exceptions import HomeAssistantError
-
     from services.providers.matter import MatterLockProvider
 
     hass = _FakeHass()
@@ -443,7 +438,6 @@ def test_matter_set_code_treats_duplicate_status_as_verified():
 
 def test_matter_set_code_surfaces_non_duplicate_error_as_failure():
     from homeassistant.exceptions import HomeAssistantError
-
     from services.providers.matter import MatterLockProvider
 
     hass = _FakeHass()
@@ -472,7 +466,6 @@ def test_matter_set_code_surfaces_unknown_im_status_in_extra_and_error():
     in ``extra`` and in the error string for operators.
     """
     from homeassistant.exceptions import HomeAssistantError
-
     from services.providers.matter import MatterLockProvider
 
     hass = _FakeHass()
@@ -502,7 +495,6 @@ def test_matter_set_code_classifies_unknown_133_as_slot_out_of_range():
     call (e.g. requesting slot 11 when only 10 PIN credentials exist).
     """
     from homeassistant.exceptions import HomeAssistantError
-
     from services.providers.matter import MatterLockProvider
 
     hass = _FakeHass()
@@ -550,7 +542,6 @@ def test_matter_set_code_marks_in_range_unknown_133_as_lock_rejected():
     ``lock_rejected`` rather than ``slot_out_of_range``.
     """
     from homeassistant.exceptions import HomeAssistantError
-
     from services.providers.matter import MatterLockProvider
 
     hass = _FakeHass()

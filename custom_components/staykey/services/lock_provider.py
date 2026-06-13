@@ -18,9 +18,6 @@ from dataclasses import dataclass, field
 from typing import (
     TYPE_CHECKING,
     Any,
-    Dict,
-    List,
-    Optional,
     Protocol,
     runtime_checkable,
 )
@@ -41,8 +38,8 @@ class ProviderResult:
     method: str  # e.g. "zwave_set_and_verify", "matter_set_credential"
     verified: bool
     attempts: int = 1
-    error: Optional[str] = None
-    extra: Dict[str, Any] = field(default_factory=dict)
+    error: str | None = None
+    extra: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -51,7 +48,7 @@ class SlotInfo:
 
     slot: int
     occupied: bool
-    code: Optional[str] = None
+    code: str | None = None
 
 
 @dataclass
@@ -69,8 +66,8 @@ class CapabilityInfo:
     """
 
     supports_access_codes: bool
-    max_slots: Optional[int] = None
-    extra: Dict[str, Any] = field(default_factory=dict)
+    max_slots: int | None = None
+    extra: dict[str, Any] = field(default_factory=dict)
 
 
 @runtime_checkable
@@ -104,7 +101,7 @@ class LockProvider(Protocol):
         hass: HomeAssistant,
         entity_id: str,
         max_slots: int = 30,
-    ) -> List[SlotInfo]: ...
+    ) -> list[SlotInfo]: ...
 
     async def get_capabilities(
         self,

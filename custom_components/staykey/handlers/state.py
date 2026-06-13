@@ -6,7 +6,7 @@ Translates Staykey get_state request to local HA state lookup.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict
+from typing import Any
 
 from homeassistant.core import HomeAssistant
 
@@ -18,8 +18,8 @@ LOGGER = logging.getLogger(__name__)
 async def handle_get_state(
     hass: HomeAssistant,
     device_map: DeviceMap,
-    params: Dict[str, Any],
-) -> Dict[str, Any]:
+    params: dict[str, Any],
+) -> dict[str, Any]:
     device_id = params.get("device_id", "")
     entity_id = device_map.get_entity_id(device_id)
     if not entity_id:
@@ -30,7 +30,7 @@ async def handle_get_state(
         return {"state": "unavailable", "attributes": {}}
 
     attrs = dict(state.attributes) if state.attributes else {}
-    safe_attrs: Dict[str, Any] = {}
+    safe_attrs: dict[str, Any] = {}
     for key, value in attrs.items():
         try:
             safe_attrs[key] = _make_serializable(value)

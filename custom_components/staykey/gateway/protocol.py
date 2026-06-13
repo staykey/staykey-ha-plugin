@@ -4,18 +4,18 @@ from __future__ import annotations
 
 import json
 import uuid
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 def generate_id() -> str:
     return str(uuid.uuid4())
 
 
-def encode(message: Dict[str, Any]) -> str:
+def encode(message: dict[str, Any]) -> str:
     return json.dumps(message, separators=(",", ":"))
 
 
-def decode(text: str) -> Dict[str, Any]:
+def decode(text: str) -> dict[str, Any]:
     return json.loads(text)
 
 
@@ -27,11 +27,11 @@ def capabilities_message(
     agent_version: str,
     ha_version: str,
     protocol_version: int = 1,
-    features: Optional[list[str]] = None,
-    platforms: Optional[list[str]] = None,
-    tracked_devices: Optional[list[str]] = None,
+    features: list[str] | None = None,
+    platforms: list[str] | None = None,
+    tracked_devices: list[str] | None = None,
 ) -> str:
-    msg: Dict[str, Any] = {
+    msg: dict[str, Any] = {
         "type": "capabilities",
         "agent_version": agent_version,
         "ha_version": ha_version,
@@ -46,10 +46,10 @@ def capabilities_message(
 def response_message(
     request_id: str,
     status: str = "ok",
-    data: Optional[Dict[str, Any]] = None,
-    error: Optional[Dict[str, Any]] = None,
+    data: dict[str, Any] | None = None,
+    error: dict[str, Any] | None = None,
 ) -> str:
-    msg: Dict[str, Any] = {
+    msg: dict[str, Any] = {
         "type": "response",
         "id": request_id,
         "status": status,
@@ -63,7 +63,7 @@ def response_message(
 
 def event_push_message(
     event_type: str,
-    data: Dict[str, Any],
+    data: dict[str, Any],
 ) -> str:
     return encode({
         "type": "event_push",
@@ -74,7 +74,7 @@ def event_push_message(
 
 def state_update_message(
     device_id: str,
-    data: Dict[str, Any],
+    data: dict[str, Any],
 ) -> str:
     return encode({
         "type": "state_update",
@@ -85,7 +85,7 @@ def state_update_message(
 
 def health_alert_message(
     alert_type: str,
-    data: Dict[str, Any],
+    data: dict[str, Any],
 ) -> str:
     return encode({
         "type": "health_alert",

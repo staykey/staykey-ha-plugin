@@ -6,10 +6,11 @@ Enumerates HA entities with rich metadata using in-process registry access.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List
+from typing import Any
 
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 
 from ..lock_capability_heuristics import lock_supports_access_codes
 
@@ -20,8 +21,8 @@ SUPPORTED_DOMAINS = {"lock", "climate", "light", "cover", "sensor", "switch"}
 
 async def handle_discover_devices(
     hass: HomeAssistant,
-    params: Dict[str, Any],
-) -> Dict[str, Any]:
+    params: dict[str, Any],
+) -> dict[str, Any]:
     """Return every supported entity as a flat list, enriched with device metadata.
 
     Each row is one entity (not one physical device).  A ratgdo garage door
@@ -34,8 +35,8 @@ async def handle_discover_devices(
     filter_domains = set(params.get("domains", [])) or SUPPORTED_DOMAINS
 
     # Cache device lookups so we only hit the registry once per device_id.
-    device_cache: Dict[str, Any] = {}
-    entities_out: List[Dict[str, Any]] = []
+    device_cache: dict[str, Any] = {}
+    entities_out: list[dict[str, Any]] = []
 
     for entry in entity_reg.entities.values():
         if entry.domain not in filter_domains:
@@ -43,7 +44,7 @@ async def handle_discover_devices(
         if entry.disabled:
             continue
 
-        entity_info: Dict[str, Any] = {
+        entity_info: dict[str, Any] = {
             "external_id": entry.entity_id,
             "name": entry.name or entry.original_name or entry.entity_id,
             "type": entry.domain,

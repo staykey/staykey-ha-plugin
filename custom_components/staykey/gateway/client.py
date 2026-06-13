@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
-from typing import Any, Callable, Coroutine, Dict, Optional
+from collections.abc import Callable, Coroutine
+from typing import Any
 
 import aiohttp
 from homeassistant.config_entries import ConfigEntry
@@ -39,9 +41,9 @@ class GatewayClient:
         agent_version: str,
         device_map: DeviceMap,
         command_handler: Callable[
-            [str, str, Dict[str, Any]], Coroutine[Any, Any, Dict[str, Any]]
+            [str, str, dict[str, Any]], Coroutine[Any, Any, dict[str, Any]]
         ],
-        config_entry: Optional[ConfigEntry] = None,
+        config_entry: ConfigEntry | None = None,
     ) -> None:
         self._hass = hass
         self._gateway_url = gateway_url
@@ -50,10 +52,10 @@ class GatewayClient:
         self._device_map = device_map
         self._command_handler = command_handler
         self._config_entry = config_entry
-        self._ws: Optional[aiohttp.ClientWebSocketResponse] = None
+        self._ws: aiohttp.ClientWebSocketResponse | None = None
         self._running = False
-        self._reconnect_task: Optional[asyncio.Task] = None
-        self._listen_task: Optional[asyncio.Task] = None
+        self._reconnect_task: asyncio.Task | None = None
+        self._listen_task: asyncio.Task | None = None
         self._event_queue = EventQueue()
 
     @property
@@ -103,13 +105,13 @@ class GatewayClient:
         else:
             self._event_queue.enqueue(text)
 
-    async def send_event(self, event_type: str, data: Dict[str, Any]) -> None:
+    async def send_event(self, event_type: str, data: dict[str, Any]) -> None:
         await self.send_or_queue(protocol.event_push_message(event_type, data))
 
-    async def send_state_update(self, device_id: str, data: Dict[str, Any]) -> None:
+    async def send_state_update(self, device_id: str, data: dict[str, Any]) -> None:
         await self.send_or_queue(protocol.state_update_message(device_id, data))
 
-    async def send_health_alert(self, alert_type: str, data: Dict[str, Any]) -> None:
+    async def send_health_alert(self, alert_type: str, data: dict[str, Any]) -> None:
         await self.send_or_queue(protocol.health_alert_message(alert_type, data))
 
     async def send_entity_id_changed(
@@ -277,7 +279,7 @@ class GatewayClient:
 
         LOGGER.debug("Unhandled gateway message type: %s", msg_type)
 
-    async def _handle_request(self, message: Dict[str, Any]) -> None:
+    async def _handle_request(self, message: dict[str, Any]) -> None:
         request_id = message.get("id", "")
         action = message.get("action", "")
         params = message.get("params", {})
@@ -352,8 +354,6 @@ class GatewayClient:
 
     async def _close_ws(self) -> None:
         if self._ws and not self._ws.closed:
-            try:
+            with contextlib.suppress(Exception):
                 await self._ws.close()
-            except Exception:
-                pass
         self._ws = None

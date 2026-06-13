@@ -6,7 +6,7 @@ Translates Staykey-owned schemas to HA service calls for the cover domain.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
 from homeassistant.core import HomeAssistant
 
@@ -21,9 +21,9 @@ _COVER_STATE_TIMEOUT = 30  # seconds — aligned with Staykey API timeouts
 async def handle_open_cover(
     hass: HomeAssistant,
     device_map: DeviceMap,
-    params: Dict[str, Any],
-    progress_fn: Optional[ProgressFn] = None,
-) -> Dict[str, Any]:
+    params: dict[str, Any],
+    progress_fn: ProgressFn | None = None,
+) -> dict[str, Any]:
     device_id = params.get("device_id", "")
     entity_id = device_map.get_entity_id(device_id)
     if not entity_id:
@@ -46,9 +46,9 @@ async def handle_open_cover(
 async def handle_close_cover(
     hass: HomeAssistant,
     device_map: DeviceMap,
-    params: Dict[str, Any],
-    progress_fn: Optional[ProgressFn] = None,
-) -> Dict[str, Any]:
+    params: dict[str, Any],
+    progress_fn: ProgressFn | None = None,
+) -> dict[str, Any]:
     device_id = params.get("device_id", "")
     entity_id = device_map.get_entity_id(device_id)
     if not entity_id:
@@ -71,8 +71,8 @@ async def handle_close_cover(
 async def handle_stop_cover(
     hass: HomeAssistant,
     device_map: DeviceMap,
-    params: Dict[str, Any],
-) -> Dict[str, Any]:
+    params: dict[str, Any],
+) -> dict[str, Any]:
     device_id = params.get("device_id", "")
     entity_id = device_map.get_entity_id(device_id)
     if not entity_id:

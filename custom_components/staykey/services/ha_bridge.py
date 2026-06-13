@@ -10,7 +10,8 @@ in turn dispatches to the protocol-specific
 from __future__ import annotations
 
 import logging
-from typing import Any, Awaitable, Callable, Coroutine, Dict, Optional
+from collections.abc import Callable, Coroutine
+from typing import Any
 
 from homeassistant.core import HomeAssistant
 
@@ -58,8 +59,8 @@ _ACTION_MAP = {
 _PROGRESS_ACTIONS = {"lock", "unlock", "open_cover", "close_cover"}
 
 CommandHandler = Callable[
-    [str, str, Dict[str, Any], Optional[ProgressFn]],
-    Coroutine[Any, Any, Dict[str, Any]],
+    [str, str, dict[str, Any], ProgressFn | None],
+    Coroutine[Any, Any, dict[str, Any]],
 ]
 
 
@@ -72,9 +73,9 @@ def create_command_handler(
     async def handle_command(
         action: str,
         request_id: str,
-        params: Dict[str, Any],
-        progress_fn: Optional[ProgressFn] = None,
-    ) -> Dict[str, Any]:
+        params: dict[str, Any],
+        progress_fn: ProgressFn | None = None,
+    ) -> dict[str, Any]:
         LOGGER.debug("Handling command: action=%s id=%s", action, request_id)
 
         handler = _ACTION_MAP.get(action)
@@ -97,7 +98,7 @@ def create_command_handler(
 
 async def _handle_list_entities(
     hass: HomeAssistant,
-    params: Dict[str, Any],
+    params: dict[str, Any],
 ) -> list:
     """Flatten discovered devices for list_entities consumers.
 

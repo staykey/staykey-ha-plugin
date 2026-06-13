@@ -8,13 +8,13 @@ import logging
 import re
 import uuid
 from datetime import timezone
-from typing import Any, Callable, Dict, Optional
+from typing import Any
 
 from aiohttp import ClientError
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_URL
 from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant
-from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.loader import async_get_integration
@@ -77,9 +77,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     plugin_version: str = integration.version or "0.0.0"
 
     unsubscribers: list[CALLBACK_TYPE] = []
-    gateway_client: Optional[GatewayClient] = None
+    gateway_client: GatewayClient | None = None
     device_map = DeviceMap()
-    last_sent_states: Dict[str, str] = {}
+    last_sent_states: dict[str, str] = {}
 
     # --- Gateway mode ---
     if gateway_token:
@@ -133,7 +133,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
             last_sent_states[entity_id] = state_value
 
-            state_data: Dict[str, Any] = {
+            state_data: dict[str, Any] = {
                 "state": state_value,
                 "last_changed": (
                     new_state.last_changed.isoformat()
@@ -221,7 +221,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 return str(value)
             return str(obj)
 
-        async def send_webhook(payload: Dict[str, Any]) -> None:
+        async def send_webhook(payload: dict[str, Any]) -> None:
             body = json.dumps(payload, separators=(",", ":"), default=_json_default)
             headers = {"Content-Type": "application/json"}
             try:
@@ -310,10 +310,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             device_reg = dr.async_get(hass)
             entity_reg = er.async_get(hass)
             device_id = d.get("device_id")
-            entity_id: Optional[str] = None
-            device_name: Optional[str] = None
-            manufacturer: Optional[str] = None
-            model: Optional[str] = None
+            entity_id: str | None = None
+            device_name: str | None = None
+            manufacturer: str | None = None
+            model: str | None = None
 
             if device_id:
                 device = device_reg.async_get(device_id)
@@ -329,7 +329,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     if chosen:
                         entity_id = chosen.entity_id
 
-            payload: Dict[str, Any] = {
+            payload: dict[str, Any] = {
                 "schema_version": "1.0",
                 "event_id": str(uuid.uuid4()),
                 "occurred_at": occurred_at,
@@ -379,11 +379,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
             d = event.data or {}
 
-            device_reg = dr.async_get(hass)
+            dr.async_get(hass)
             entity_reg = er.async_get(hass)
             ha_device_id = d.get("device_id")
-            entity_id: Optional[str] = None
-            sk_device_id: Optional[str] = None
+            entity_id: str | None = None
+            sk_device_id: str | None = None
 
             if ha_device_id:
                 ents = er.async_entries_for_device(

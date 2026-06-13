@@ -8,15 +8,13 @@ as activity updates. Filters out:
 
 from __future__ import annotations
 
-from typing import Optional
-
 COVER_TERMINAL_STATES = frozenset({"open", "closed"})
 
 
 def should_forward_state(
     entity_id: str,
     state_value: str,
-    last_sent_state: Optional[str],
+    last_sent_state: str | None,
 ) -> bool:
     """Decide whether a state change should be forwarded to the gateway.
 
@@ -29,7 +27,4 @@ def should_forward_state(
 
     domain = entity_id.split(".")[0] if "." in entity_id else ""
 
-    if domain == "cover" and state_value not in COVER_TERMINAL_STATES:
-        return False
-
-    return True
+    return not (domain == "cover" and state_value not in COVER_TERMINAL_STATES)

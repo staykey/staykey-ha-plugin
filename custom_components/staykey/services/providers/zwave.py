@@ -11,12 +11,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 
-from ..lock_provider import CapabilityInfo, LockProvider, ProviderResult, SlotInfo
+from ..lock_provider import CapabilityInfo, ProviderResult, SlotInfo
 
 try:
     from zwave_js_server.const import CommandClass  # noqa: F401
@@ -68,7 +69,7 @@ class ZwaveLockProvider:
         hass: HomeAssistant,
         entity_id: str,
         max_slots: int = 30,
-    ) -> List[SlotInfo]:
+    ) -> list[SlotInfo]:
         """Read lock code-slot contents from the cached Z-Wave ValueDB."""
         return await _read_code_slots(hass, entity_id, max_slots)
 
@@ -95,7 +96,7 @@ class ZwaveLockProvider:
 
 def _get_zwave_node_for_entity(
     hass: HomeAssistant, entity_id: str
-) -> Optional[Any]:
+) -> Any | None:
     """Look up the Z-Wave node associated with a HA entity via the device registry."""
     try:
         entity_reg = er.async_get(hass)
@@ -179,7 +180,7 @@ def _get_zwave_node_for_entity(
 
 async def _read_code_slots(
     hass: HomeAssistant, entity_id: str, max_slots: int = 30
-) -> List[SlotInfo]:
+) -> list[SlotInfo]:
     if not HAS_ZWAVE_LIB:
         LOGGER.warning("zwave_js_server library not available for code slot reading")
         return []
@@ -191,13 +192,13 @@ async def _read_code_slots(
 
     try:
         lib_slots = get_usercodes(node)
-        results: List[SlotInfo] = []
+        results: list[SlotInfo] = []
         for s in lib_slots:
             slot_num = s["code_slot"]
             if slot_num > max_slots:
                 continue
             occupied = s.get("in_use") is True
-            code: Optional[str] = None
+            code: str | None = None
             if occupied and s.get("usercode"):
                 code = str(s["usercode"])
             results.append(SlotInfo(slot=slot_num, occupied=occupied, code=code))
@@ -209,7 +210,7 @@ async def _read_code_slots(
 
 async def _fetch_code_slot(
     hass: HomeAssistant, entity_id: str, slot: int
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Actively query a single code slot from the lock over Z-Wave."""
     if not HAS_ZWAVE_LIB:
         return None
@@ -232,7 +233,7 @@ async def _fetch_code_slot(
 
 async def get_node_info(
     hass: HomeAssistant, entity_id: str
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Get Z-Wave node information for capability discovery.
 
     Public helper used by ``handlers/diagnostics.py`` and the legacy
@@ -244,7 +245,7 @@ async def get_node_info(
         return None
 
     try:
-        info: Dict[str, Any] = {
+        info: dict[str, Any] = {
             "node_id": getattr(node, "node_id", None),
             "status": str(getattr(node, "status", "unknown")),
             "ready": getattr(node, "ready", False),
@@ -317,7 +318,7 @@ async def _set_and_verify_code(
     Uses node.async_invoke_cc_api to fetch the slot value directly from the
     lock rather than relying on the passive ValueDB cache.
     """
-    last_error: Optional[str] = None
+    last_error: str | None = None
 
     for attempt in range(max_retries + 1):
         try:
