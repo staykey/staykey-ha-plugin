@@ -10,7 +10,7 @@ All responses use canonical attribute names (matching Types.normalize_attributes
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
 from homeassistant.core import HomeAssistant, State
 
@@ -20,15 +20,15 @@ LOGGER = logging.getLogger(__name__)
 
 
 def _build_climate_result(
-    state: Optional[State],
+    state: State | None,
     entity_id: str,
     action: str,
     **extra: Any,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Build a normalized climate action response with all temperature fields."""
     attrs = dict(state.attributes) if state and state.attributes else {}
 
-    result: Dict[str, Any] = {
+    result: dict[str, Any] = {
         "entity_id": entity_id,
         "action": action,
         "status": state.state if state else "unknown",
@@ -45,14 +45,14 @@ def _build_climate_result(
 async def handle_set_temperature(
     hass: HomeAssistant,
     device_map: DeviceMap,
-    params: Dict[str, Any],
-) -> Dict[str, Any]:
+    params: dict[str, Any],
+) -> dict[str, Any]:
     device_id = params.get("device_id", "")
     entity_id = device_map.get_entity_id(device_id)
     if not entity_id:
         raise ValueError(f"Unknown device_id: {device_id}")
 
-    service_data: Dict[str, Any] = {"entity_id": entity_id}
+    service_data: dict[str, Any] = {"entity_id": entity_id}
 
     target_temp = params.get("target_temperature")
     target_low = params.get("target_temperature_low")
@@ -76,8 +76,8 @@ async def handle_set_temperature(
 async def handle_set_hvac_mode(
     hass: HomeAssistant,
     device_map: DeviceMap,
-    params: Dict[str, Any],
-) -> Dict[str, Any]:
+    params: dict[str, Any],
+) -> dict[str, Any]:
     device_id = params.get("device_id", "")
     entity_id = device_map.get_entity_id(device_id)
     if not entity_id:
@@ -96,5 +96,8 @@ async def handle_set_hvac_mode(
 
     state = hass.states.get(entity_id)
     return _build_climate_result(
-        state, entity_id, "set_hvac_mode", hvac_mode=hvac_mode,
+        state,
+        entity_id,
+        "set_hvac_mode",
+        hvac_mode=hvac_mode,
     )

@@ -58,12 +58,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any
 from weakref import WeakValueDictionary
 
 from homeassistant.exceptions import HomeAssistantError
 
-from ..lock_provider import CapabilityInfo, LockProvider, ProviderResult, SlotInfo
+from ..lock_provider import CapabilityInfo, ProviderResult, SlotInfo
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -78,7 +78,7 @@ LOGGER = logging.getLogger(__name__)
 # the SetCredential lands the other op has already added a credential
 # at that index. Using a WeakValueDictionary so locks are GC'd when
 # entities are removed.
-_ENTITY_LOCKS: "WeakValueDictionary[str, asyncio.Lock]" = WeakValueDictionary()
+_ENTITY_LOCKS: WeakValueDictionary[str, asyncio.Lock] = WeakValueDictionary()
 
 
 def _get_entity_lock(entity_id: str) -> asyncio.Lock:
@@ -87,6 +87,7 @@ def _get_entity_lock(entity_id: str) -> asyncio.Lock:
         lock = asyncio.Lock()
         _ENTITY_LOCKS[entity_id] = lock
     return lock
+
 
 _MATTER_DOMAIN = "matter"
 _PIN = "pin"
@@ -190,13 +191,15 @@ class MatterLockProvider:
                     "preflight_error": str(exc.original or exc),
                 },
             )
-            _log_set_outcome(entity_id, slot, code, "preflight", started_at, result, exc=exc.original)
+            _log_set_outcome(
+                entity_id, slot, code, "preflight", started_at, result, exc=exc.original
+            )
             return result
 
         is_modify = bool(existing and existing.get("credential_exists"))
         operation = "modify" if is_modify else "add"
 
-        request_payload: Dict[str, Any] = {
+        request_payload: dict[str, Any] = {
             "entity_id": entity_id,
             "credential_type": _PIN,
             "credential_data": str(code),
@@ -225,7 +228,7 @@ class MatterLockProvider:
             request_payload.get("user_index", "<auto>"),
         )
 
-        set_response: Optional[Dict[str, Any]] = None
+        set_response: dict[str, Any] | None = None
         try:
             set_response = await hass.services.async_call(
                 _MATTER_DOMAIN,
@@ -248,7 +251,7 @@ class MatterLockProvider:
                 _log_set_outcome(entity_id, slot, code, operation, started_at, result)
                 return result
             matter_status = _extract_matter_status(exc)
-            extra: Dict[str, Any] = {"operation": operation}
+            extra: dict[str, Any] = {"operation": operation}
             if matter_status is not None:
                 extra["matter_status"] = matter_status
 
@@ -413,7 +416,7 @@ class MatterLockProvider:
             )
         except HomeAssistantError as exc:
             matter_status = _extract_matter_status(exc)
-            extra: Dict[str, Any] = {"user_index": user_index}
+            extra: dict[str, Any] = {"user_index": user_index}
             if matter_status is not None:
                 extra["matter_status"] = matter_status
             result = ProviderResult(
@@ -476,7 +479,7 @@ class MatterLockProvider:
             )
         except HomeAssistantError as exc:
             matter_status = _extract_matter_status(exc)
-            extra: Dict[str, Any] = {"orphan": True}
+            extra: dict[str, Any] = {"orphan": True}
             if matter_status is not None:
                 extra["matter_status"] = matter_status
             result = ProviderResult(
@@ -503,7 +506,7 @@ class MatterLockProvider:
         hass: HomeAssistant,
         entity_id: str,
         max_slots: int = 30,
-    ) -> List[SlotInfo]:
+    ) -> list[SlotInfo]:
         """Probe each slot via ``matter.get_lock_credential_status``.
 
         Matter doesn't return PIN values (write-only on the lock), so the
@@ -511,7 +514,7 @@ class MatterLockProvider:
         observable.  This is intentional: callers that need to display
         codes should keep them in their own datastore.
         """
-        results: List[SlotInfo] = []
+        results: list[SlotInfo] = []
         for slot in range(1, max_slots + 1):
             try:
                 status = await _get_credential_status(hass, entity_id, slot)
@@ -539,9 +542,8 @@ class MatterLockProvider:
         if not info:
             return CapabilityInfo(supports_access_codes=False)
 
-        supports = (
-            bool(info.get("supports_user_management"))
-            and _PIN in (info.get("supported_credential_types") or [])
+        supports = bool(info.get("supports_user_management")) and _PIN in (
+            info.get("supported_credential_types") or []
         )
         return CapabilityInfo(
             supports_access_codes=supports,
@@ -556,8 +558,8 @@ class MatterLockProvider:
 
 
 def _extract_entity_response(
-    response: Optional[Dict[str, Any]], entity_id: str
-) -> Optional[Dict[str, Any]]:
+    response: dict[str, Any] | None, entity_id: str
+) -> dict[str, Any] | None:
     """HA's call_service with return_response wraps results by entity_id."""
     if not isinstance(response, dict):
         return None
@@ -576,13 +578,16 @@ def _is_duplicate_credential_error(exc: BaseException) -> bool:
     helper class shape changes between HA releases.
     """
     placeholders = getattr(exc, "translation_placeholders", None)
-    if isinstance(placeholders, dict) and placeholders.get("status") == _DUPLICATE_STATUS:
+    if (
+        isinstance(placeholders, dict)
+        and placeholders.get("status") == _DUPLICATE_STATUS
+    ):
         return True
 
     return _DUPLICATE_STATUS in str(exc).lower()
 
 
-def _extract_matter_status(exc: BaseException) -> Optional[str]:
+def _extract_matter_status(exc: BaseException) -> str | None:
     """Pull the structured Matter status out of an HA exception.
 
     HA's matter lock helpers raise with
@@ -601,9 +606,9 @@ def _extract_matter_status(exc: BaseException) -> Optional[str]:
 
 
 def _format_set_error(
-    matter_status: Optional[str],
+    matter_status: str | None,
     exc: BaseException,
-    extra: Optional[Dict[str, Any]] = None,
+    extra: dict[str, Any] | None = None,
 ) -> str:
     """Build the ProviderResult.error string with the Matter status if present.
 
@@ -636,8 +641,8 @@ async def _enrich_with_capacity_context(
     hass: HomeAssistant,
     entity_id: str,
     slot: int,
-    matter_status: Optional[str],
-    extra: Dict[str, Any],
+    matter_status: str | None,
+    extra: dict[str, Any],
 ) -> None:
     """Look up the lock's PIN-slot capacity to classify ``unknown(133)``.
 
@@ -677,7 +682,7 @@ async def _enrich_with_capacity_context(
         extra.setdefault("reason", "lock_rejected")
 
 
-def _format_clear_error(matter_status: Optional[str], exc: BaseException) -> str:
+def _format_clear_error(matter_status: str | None, exc: BaseException) -> str:
     """Mirror of ``_format_set_error`` for the clear path."""
     if matter_status:
         return f"clear_lock_user: matter_status={matter_status}: {exc}"
@@ -692,7 +697,7 @@ def _log_set_outcome(
     started_at: float,
     result: ProviderResult,
     *,
-    exc: Optional[BaseException] = None,
+    exc: BaseException | None = None,
 ) -> None:
     """Emit one structured wide-event log line per ``set_code`` attempt.
 
@@ -731,7 +736,7 @@ def _log_clear_outcome(
     started_at: float,
     result: ProviderResult,
     *,
-    exc: Optional[BaseException] = None,
+    exc: BaseException | None = None,
 ) -> None:
     """Emit one structured wide-event log line per ``clear_code`` attempt."""
     duration_ms = int((time.monotonic() - started_at) * 1000)
@@ -753,7 +758,7 @@ def _log_clear_outcome(
     )
 
 
-def _format_log_error(error: Optional[str], exc: Optional[BaseException]) -> str:
+def _format_log_error(error: str | None, exc: BaseException | None) -> str:
     if error:
         return error
     if exc is not None:
@@ -770,14 +775,14 @@ class PreflightUnavailable(Exception):
     safe rather than treat unknown as empty.
     """
 
-    def __init__(self, message: str, *, original: Optional[BaseException] = None) -> None:
+    def __init__(self, message: str, *, original: BaseException | None = None) -> None:
         super().__init__(message)
         self.original = original
 
 
 async def _get_credential_status(
     hass: HomeAssistant, entity_id: str, slot: int
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Look up the credential status for *slot*.
 
     Returns the per-entity status dict on success. May return ``None``
@@ -816,9 +821,7 @@ async def _get_credential_status(
     return _extract_entity_response(response, entity_id)
 
 
-async def _get_lock_info(
-    hass: HomeAssistant, entity_id: str
-) -> Optional[Dict[str, Any]]:
+async def _get_lock_info(hass: HomeAssistant, entity_id: str) -> dict[str, Any] | None:
     try:
         response = await hass.services.async_call(
             _MATTER_DOMAIN,
@@ -828,14 +831,12 @@ async def _get_lock_info(
             return_response=True,
         )
     except Exception:
-        LOGGER.warning(
-            "matter.get_lock_info failed for %s", entity_id, exc_info=True
-        )
+        LOGGER.warning("matter.get_lock_info failed for %s", entity_id, exc_info=True)
         return None
     return _extract_entity_response(response, entity_id)
 
 
-def _extract_max_slots(info: Dict[str, Any]) -> Optional[int]:
+def _extract_max_slots(info: dict[str, Any]) -> int | None:
     """Pick the PIN slot capacity from a ``get_lock_info`` payload.
 
     HA's matter integration may surface ``max_pin_users`` (preferred — the

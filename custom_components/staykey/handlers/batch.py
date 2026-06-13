@@ -7,26 +7,27 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Callable, Coroutine, Dict, List
+from collections.abc import Callable, Coroutine
+from typing import Any
 
 LOGGER = logging.getLogger(__name__)
 
 
 async def handle_batch(
     command_handler: Callable[
-        [str, str, Dict[str, Any]], Coroutine[Any, Any, Dict[str, Any]]
+        [str, str, dict[str, Any]], Coroutine[Any, Any, dict[str, Any]]
     ],
-    params: Dict[str, Any],
-) -> Dict[str, Any]:
+    params: dict[str, Any],
+) -> dict[str, Any]:
     """Execute a batch of commands in parallel, return consolidated results."""
-    commands: List[Dict[str, Any]] = params.get("commands", [])
+    commands: list[dict[str, Any]] = params.get("commands", [])
     if not commands:
         raise ValueError("commands list is required and must not be empty")
 
     max_concurrency = min(params.get("max_concurrency", 5), 10)
     semaphore = asyncio.Semaphore(max_concurrency)
 
-    async def run_one(cmd: Dict[str, Any]) -> Dict[str, Any]:
+    async def run_one(cmd: dict[str, Any]) -> dict[str, Any]:
         action = cmd.get("action", "")
         cmd_params = cmd.get("params", {})
         cmd_id = cmd.get("id", action)

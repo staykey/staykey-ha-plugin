@@ -10,7 +10,7 @@ hard-failing on Matter / Wi-Fi / Zigbee devices.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict
+from typing import Any
 
 from homeassistant.core import HomeAssistant
 
@@ -25,8 +25,8 @@ LOGGER = logging.getLogger(__name__)
 async def handle_get_capabilities(
     hass: HomeAssistant,
     device_map: DeviceMap,
-    params: Dict[str, Any],
-) -> Dict[str, Any]:
+    params: dict[str, Any],
+) -> dict[str, Any]:
     """Get detailed capability information for a device.
 
     Accepts ``external_id`` (the HA ``entity_id``) **or** ``device_id``
@@ -50,7 +50,7 @@ async def handle_get_capabilities(
                 f"device_id={device_id!r}"
             )
 
-    capabilities: Dict[str, Any] = {
+    capabilities: dict[str, Any] = {
         "device_id": device_id,
         "entity_id": entity_id,
     }

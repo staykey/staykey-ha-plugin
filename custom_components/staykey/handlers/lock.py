@@ -9,7 +9,7 @@ from the device-registry identifiers behind the entity (Z-Wave, Matter, ...).
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
 from homeassistant.core import HomeAssistant
 
@@ -26,9 +26,9 @@ _LOCK_STATE_TIMEOUT = 15  # seconds — aligned with Staykey API timeouts
 async def handle_lock(
     hass: HomeAssistant,
     device_map: DeviceMap,
-    params: Dict[str, Any],
-    progress_fn: Optional[ProgressFn] = None,
-) -> Dict[str, Any]:
+    params: dict[str, Any],
+    progress_fn: ProgressFn | None = None,
+) -> dict[str, Any]:
     device_id = params.get("device_id", "")
     entity_id = device_map.get_entity_id(device_id)
     if not entity_id:
@@ -39,7 +39,11 @@ async def handle_lock(
     )
 
     status = await wait_for_state(
-        hass, entity_id, "locked", _LOCK_STATE_TIMEOUT, progress_fn=progress_fn,
+        hass,
+        entity_id,
+        "locked",
+        _LOCK_STATE_TIMEOUT,
+        progress_fn=progress_fn,
     )
     return {"state": status, "method": "remote"}
 
@@ -47,24 +51,26 @@ async def handle_lock(
 async def handle_unlock(
     hass: HomeAssistant,
     device_map: DeviceMap,
-    params: Dict[str, Any],
-    progress_fn: Optional[ProgressFn] = None,
-) -> Dict[str, Any]:
+    params: dict[str, Any],
+    progress_fn: ProgressFn | None = None,
+) -> dict[str, Any]:
     device_id = params.get("device_id", "")
     entity_id = device_map.get_entity_id(device_id)
     if not entity_id:
         raise ValueError(f"Unknown device_id: {device_id}")
 
-    service_data: Dict[str, Any] = {"entity_id": entity_id}
+    service_data: dict[str, Any] = {"entity_id": entity_id}
     if code := params.get("code"):
         service_data["code"] = code
 
-    await hass.services.async_call(
-        "lock", "unlock", service_data, blocking=True
-    )
+    await hass.services.async_call("lock", "unlock", service_data, blocking=True)
 
     status = await wait_for_state(
-        hass, entity_id, "unlocked", _LOCK_STATE_TIMEOUT, progress_fn=progress_fn,
+        hass,
+        entity_id,
+        "unlocked",
+        _LOCK_STATE_TIMEOUT,
+        progress_fn=progress_fn,
     )
     return {"state": status, "method": "remote"}
 
@@ -72,8 +78,8 @@ async def handle_unlock(
 async def handle_set_access_code(
     hass: HomeAssistant,
     device_map: DeviceMap,
-    params: Dict[str, Any],
-) -> Dict[str, Any]:
+    params: dict[str, Any],
+) -> dict[str, Any]:
     """Set an access code on a lock via the protocol-appropriate provider."""
     entity_id = _resolve_entity_id(device_map, params)
     slot, code = _resolve_slot_and_code(params)
@@ -86,8 +92,8 @@ async def handle_set_access_code(
 async def handle_clear_access_code(
     hass: HomeAssistant,
     device_map: DeviceMap,
-    params: Dict[str, Any],
-) -> Dict[str, Any]:
+    params: dict[str, Any],
+) -> dict[str, Any]:
     """Clear an access code from a lock via the protocol-appropriate provider."""
     entity_id = _resolve_entity_id(device_map, params)
     slot = _resolve_slot(params)
@@ -103,8 +109,8 @@ async def handle_clear_access_code(
 async def handle_read_codes(
     hass: HomeAssistant,
     device_map: DeviceMap,
-    params: Dict[str, Any],
-) -> Dict[str, Any]:
+    params: dict[str, Any],
+) -> dict[str, Any]:
     """Read code slot contents from a lock via the protocol-appropriate provider."""
     entity_id = _resolve_entity_id(device_map, params)
     max_slots = int(params.get("max_slots", 30))
@@ -119,7 +125,7 @@ async def handle_read_codes(
 # ---------------------------------------------------------------------------
 
 
-def _resolve_entity_id(device_map: DeviceMap, params: Dict[str, Any]) -> str:
+def _resolve_entity_id(device_map: DeviceMap, params: dict[str, Any]) -> str:
     """Resolve HA entity_id from either ``external_id`` or ``device_id``.
 
     Remote/API requests often send ``external_id`` (the HA ``entity_id``)
@@ -140,22 +146,22 @@ def _resolve_entity_id(device_map: DeviceMap, params: Dict[str, Any]) -> str:
     )
 
 
-def _resolve_slot(params: Dict[str, Any]) -> int:
+def _resolve_slot(params: dict[str, Any]) -> int:
     slot = params.get("slot") or params.get("code_slot")
     if slot is None:
         raise ValueError("slot/code_slot is required")
     return int(slot)
 
 
-def _resolve_slot_and_code(params: Dict[str, Any]) -> tuple[int, str]:
+def _resolve_slot_and_code(params: dict[str, Any]) -> tuple[int, str]:
     code = params.get("code") or params.get("access_code")
     if not code:
         raise ValueError("code/access_code is required")
     return _resolve_slot(params), str(code)
 
 
-def _provider_result_to_dict(result: ProviderResult) -> Dict[str, Any]:
-    out: Dict[str, Any] = {
+def _provider_result_to_dict(result: ProviderResult) -> dict[str, Any]:
+    out: dict[str, Any] = {
         "slot": result.slot,
         "method": result.method,
         "verified": result.verified,
@@ -181,8 +187,8 @@ def _provider_result_to_dict(result: ProviderResult) -> Dict[str, Any]:
     return out
 
 
-def _slot_info_to_dict(info: SlotInfo) -> Dict[str, Any]:
-    out: Dict[str, Any] = {"slot": info.slot, "occupied": info.occupied}
+def _slot_info_to_dict(info: SlotInfo) -> dict[str, Any]:
+    out: dict[str, Any] = {"slot": info.slot, "occupied": info.occupied}
     if info.code is not None:
         out["code"] = info.code
     return out

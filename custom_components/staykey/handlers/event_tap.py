@@ -25,7 +25,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Dict, Iterable, List, Optional
+from collections.abc import Iterable
+from typing import Any
 
 from homeassistant.core import HomeAssistant
 
@@ -42,8 +43,8 @@ _DEFAULT_MAX_EVENTS = 200
 async def handle_tap_events(
     hass: HomeAssistant,
     device_map: Any,  # noqa: ARG001 - kept for handler signature uniformity
-    params: Dict[str, Any],
-) -> Dict[str, Any]:
+    params: dict[str, Any],
+) -> dict[str, Any]:
     """Listen on ``hass.bus`` for *duration_seconds* and return events.
 
     Expected ``params`` shape::
@@ -90,9 +91,9 @@ async def handle_tap_events(
     if entity_id_filter is not None and not isinstance(entity_id_filter, str):
         raise ValueError("tap_events: 'entity_id' must be a string when provided")
 
-    captured: List[Dict[str, Any]] = []
+    captured: list[dict[str, Any]] = []
     truncated = False
-    unsubs: List[Any] = []
+    unsubs: list[Any] = []
 
     def _record(event: Any) -> None:
         nonlocal truncated
@@ -181,29 +182,31 @@ def _coerce_max_events(value: Any) -> int:
     return min(value, _MAX_EVENTS)
 
 
-def _coerce_event_types(value: Any) -> Optional[List[str]]:
+def _coerce_event_types(value: Any) -> list[str] | None:
     if value is None:
         return None
     if not isinstance(value, list):
         raise ValueError("tap_events: 'event_types' must be a list of strings")
-    out: List[str] = []
+    out: list[str] = []
     for item in value:
         if not isinstance(item, str) or not item:
-            raise ValueError("tap_events: 'event_types' entries must be non-empty strings")
+            raise ValueError(
+                "tap_events: 'event_types' entries must be non-empty strings"
+            )
         out.append(item)
     if not out:
         return None
     return out
 
 
-def _serialize_event(event: Any) -> Dict[str, Any]:
+def _serialize_event(event: Any) -> dict[str, Any]:
     """Produce a JSON-safe representation of an HA Event.
 
     HA's ``Event`` carries ``data`` (a dict, often containing rich
     objects like ``State``, ``datetime``, etc.) and metadata.  We
     serialize everything into JSON-friendly primitives for transport.
     """
-    payload: Dict[str, Any] = {
+    payload: dict[str, Any] = {
         "event_type": getattr(event, "event_type", None),
         "time_fired": _isoformat(getattr(event, "time_fired", None)),
         "origin": _origin_name(getattr(event, "origin", None)),
@@ -213,7 +216,7 @@ def _serialize_event(event: Any) -> Dict[str, Any]:
     return payload
 
 
-def _serialize_context(ctx: Any) -> Optional[Dict[str, Any]]:
+def _serialize_context(ctx: Any) -> dict[str, Any] | None:
     if ctx is None:
         return None
     return {
@@ -223,7 +226,7 @@ def _serialize_context(ctx: Any) -> Optional[Dict[str, Any]]:
     }
 
 
-def _origin_name(origin: Any) -> Optional[str]:
+def _origin_name(origin: Any) -> str | None:
     if origin is None:
         return None
     # HA's EventOrigin is an Enum; ``.value`` is the canonical string
@@ -232,7 +235,7 @@ def _origin_name(origin: Any) -> Optional[str]:
     return getattr(origin, "value", None) or str(origin)
 
 
-def _isoformat(value: Any) -> Optional[str]:
+def _isoformat(value: Any) -> str | None:
     if value is None:
         return None
     iso = getattr(value, "isoformat", None)

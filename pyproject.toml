@@ -1,0 +1,19 @@
+[tool.ruff]
+target-version = "py313"
+line-length = 88
+src = ["custom_components", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = [
+  "B008",   # HA/voluptuous patterns pass callables as defaults
+  "E501",   # line length owned by the formatter; remaining overflows are docstrings/long string literals it won't split
+  "UP017",  # datetime.UTC rewrite is 3.11+ only; test runtime is 3.9, would break at runtime
+  "UP041",  # asyncio.TimeoutError->TimeoutError changes caught exceptions on 3.9 (behavioral)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]  # asserts are expected in tests
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

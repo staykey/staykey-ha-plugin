@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict
+from typing import Any
 
 from homeassistant.core import HomeAssistant
 
@@ -16,15 +16,15 @@ LOGGER = logging.getLogger(__name__)
 async def handle_get_diagnostics(
     hass: HomeAssistant,
     device_map: DeviceMap,
-    params: Dict[str, Any],
-) -> Dict[str, Any]:
+    params: dict[str, Any],
+) -> dict[str, Any]:
     """Get diagnostic information for a device."""
     device_id = params.get("device_id", "")
     entity_id = device_map.get_entity_id(device_id)
     if not entity_id:
         raise ValueError(f"Unknown device_id: {device_id}")
 
-    diagnostics: Dict[str, Any] = {"device_id": device_id}
+    diagnostics: dict[str, Any] = {"device_id": device_id}
 
     state = hass.states.get(entity_id)
     if state:

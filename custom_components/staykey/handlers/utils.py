@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Awaitable, Callable, Optional
+from collections.abc import Awaitable, Callable
 
 from homeassistant.core import HomeAssistant
 
@@ -20,7 +20,7 @@ async def wait_for_state(
     entity_id: str,
     target_state: str,
     timeout: float,
-    progress_fn: Optional[ProgressFn] = None,
+    progress_fn: ProgressFn | None = None,
     poll_interval: float = 0.5,
 ) -> str:
     """Poll entity state until it matches *target_state* or *timeout* elapses.

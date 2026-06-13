@@ -6,11 +6,12 @@ Home Assistant install.
 
 from __future__ import annotations
 
-from typing import Any, Mapping, Optional
+from collections.abc import Mapping
+from typing import Any
 
 
 def lock_supports_access_codes(
-    attributes: Mapping[str, Any], protocol: Optional[str]
+    attributes: Mapping[str, Any], protocol: str | None
 ) -> bool:
     """Decide whether a lock entity supports access codes.
 
@@ -50,12 +51,7 @@ def lock_supports_access_codes(
             if isinstance(value, int) and value > 0:
                 return True
 
-        if attributes.get("supports_user_management") is True:
-            return True
-
-        return False
+        return attributes.get("supports_user_management") is True
 
     features = attributes.get("supported_features")
-    if isinstance(features, int) and features & 1:
-        return True
-    return False
+    return bool(isinstance(features, int) and features & 1)

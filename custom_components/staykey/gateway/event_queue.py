@@ -6,11 +6,9 @@ No file persistence - events are lost on HA restart (acceptable trade-off for si
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import time
 from collections import deque
-from typing import Any, Dict, Tuple
 
 LOGGER = logging.getLogger(__name__)
 
@@ -22,7 +20,7 @@ class EventQueue:
     """Buffers events during gateway disconnections."""
 
     def __init__(self, max_size: int = MAX_QUEUE_SIZE) -> None:
-        self._queue: deque[Tuple[float, str]] = deque(maxlen=max_size)
+        self._queue: deque[tuple[float, str]] = deque(maxlen=max_size)
         self._dropped = 0
 
     @property
@@ -65,7 +63,9 @@ class EventQueue:
                 break
 
         if sent > 0:
-            LOGGER.info("Drained %d queued events (%d remaining)", sent, len(self._queue))
+            LOGGER.info(
+                "Drained %d queued events (%d remaining)", sent, len(self._queue)
+            )
 
         self._dropped = 0
         return sent

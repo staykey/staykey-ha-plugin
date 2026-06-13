@@ -25,7 +25,7 @@ primitive.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict
+from typing import Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
@@ -38,8 +38,8 @@ LOGGER = logging.getLogger(__name__)
 async def handle_ha_service_call(
     hass: HomeAssistant,
     device_map: DeviceMap,  # noqa: ARG001 - kept for handler signature uniformity
-    params: Dict[str, Any],
-) -> Dict[str, Any]:
+    params: dict[str, Any],
+) -> dict[str, Any]:
     """Dispatch ``hass.services.async_call`` with the supplied payload.
 
     Expected ``params`` shape::

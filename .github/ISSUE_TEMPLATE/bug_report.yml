@@ -1,0 +1,41 @@
+name: Bug report
+description: Report a problem with the Staykey Home Assistant integration
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug and what you expected instead.
+    validations:
+      required: true
+  - type: input
+    id: ha-version
+    attributes:
+      label: Home Assistant version
+      placeholder: "2026.4.0"
+    validations:
+      required: true
+  - type: input
+    id: integration-version
+    attributes:
+      label: Staykey integration version
+      placeholder: "1.6.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: lock-stack
+    attributes:
+      label: Lock stack
+      options:
+        - Z-Wave JS
+        - Matter
+        - Other / not lock-related
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: Settings → System → Logs, filtered to `custom_components.staykey`. Redact tokens/URLs.
+      render: shell

@@ -3,17 +3,16 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 
 LOGGER = logging.getLogger(__name__)
 
 
-def resolve_entity_by_unique_id(
-    hass: HomeAssistant, unique_id: str
-) -> Optional[str]:
+def resolve_entity_by_unique_id(hass: HomeAssistant, unique_id: str) -> str | None:
     """Look up an entity_id by its unique_id in the entity registry."""
     entity_reg = er.async_get(hass)
     for entry in entity_reg.entities.values():
@@ -23,8 +22,8 @@ def resolve_entity_by_unique_id(
 
 
 def resolve_device_by_identifiers(
-    hass: HomeAssistant, device_identifiers: List[List[str]]
-) -> Optional[Dict[str, Any]]:
+    hass: HomeAssistant, device_identifiers: list[list[str]]
+) -> dict[str, Any] | None:
     """Look up a device by its identifiers in the device registry."""
     device_reg = dr.async_get(hass)
     id_sets = {tuple(ident) for ident in device_identifiers}
@@ -41,9 +40,7 @@ def resolve_device_by_identifiers(
     return None
 
 
-def get_entity_details(
-    hass: HomeAssistant, entity_id: str
-) -> Optional[Dict[str, Any]]:
+def get_entity_details(hass: HomeAssistant, entity_id: str) -> dict[str, Any] | None:
     """Get full entity registry details for a given entity_id."""
     entity_reg = er.async_get(hass)
     entry = entity_reg.async_get(entity_id)

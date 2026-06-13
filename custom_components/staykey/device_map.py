@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional, Set
+from typing import Any
 
 LOGGER = logging.getLogger(__name__)
 
@@ -15,20 +15,20 @@ class DeviceMap:
     """
 
     def __init__(self) -> None:
-        self._forward: Dict[str, Dict[str, Any]] = {}
-        self._reverse: Dict[str, str] = {}
-        self._unique_id_index: Dict[str, str] = {}
-        self._device_identifiers_index: Dict[str, str] = {}
+        self._forward: dict[str, dict[str, Any]] = {}
+        self._reverse: dict[str, str] = {}
+        self._unique_id_index: dict[str, str] = {}
+        self._device_identifiers_index: dict[str, str] = {}
 
     @property
-    def tracked_entities(self) -> Set[str]:
+    def tracked_entities(self) -> set[str]:
         return set(self._reverse.keys())
 
     @property
     def tracked_device_ids(self) -> list[str]:
         return list(self._forward.keys())
 
-    def load_sync(self, devices: list[Dict[str, Any]]) -> None:
+    def load_sync(self, devices: list[dict[str, Any]]) -> None:
         """Full replacement from a device_map_sync message."""
         self._forward.clear()
         self._reverse.clear()
@@ -40,35 +40,50 @@ class DeviceMap:
 
         LOGGER.info("Device map synced: %d devices tracked", len(self._forward))
 
-    def apply_update(self, action: str, device: Optional[Dict[str, Any]] = None, device_id: Optional[str] = None) -> None:
+    def apply_update(
+        self,
+        action: str,
+        device: dict[str, Any] | None = None,
+        device_id: str | None = None,
+    ) -> None:
         """Apply an incremental device_map_update."""
         if action == "add" and device:
             self._add_device(device)
-            LOGGER.info("Device added to map: %s -> %s", device.get("device_id"), device.get("external_id"))
+            LOGGER.info(
+                "Device added to map: %s -> %s",
+                device.get("device_id"),
+                device.get("external_id"),
+            )
         elif action == "remove" and device_id:
             self._remove_device(device_id)
             LOGGER.info("Device removed from map: %s", device_id)
         elif action == "update" and device:
             self._remove_device(device["device_id"])
             self._add_device(device)
-            LOGGER.info("Device updated in map: %s -> %s", device.get("device_id"), device.get("external_id"))
+            LOGGER.info(
+                "Device updated in map: %s -> %s",
+                device.get("device_id"),
+                device.get("external_id"),
+            )
 
-    def get_entity_id(self, device_id: str) -> Optional[str]:
+    def get_entity_id(self, device_id: str) -> str | None:
         """Look up HA entity_id by Staykey device_id (for command translation)."""
         info = self._forward.get(device_id)
         return info["external_id"] if info else None
 
-    def get_device_id(self, entity_id: str) -> Optional[str]:
+    def get_device_id(self, entity_id: str) -> str | None:
         """Look up Staykey device_id by HA entity_id (for event filtering)."""
         return self._reverse.get(entity_id)
 
-    def get_device_info(self, device_id: str) -> Optional[Dict[str, Any]]:
+    def get_device_info(self, device_id: str) -> dict[str, Any] | None:
         return self._forward.get(device_id)
 
-    def get_device_by_unique_id(self, unique_id: str) -> Optional[str]:
+    def get_device_by_unique_id(self, unique_id: str) -> str | None:
         return self._unique_id_index.get(unique_id)
 
-    def update_entity_id(self, device_id: str, old_entity_id: str, new_entity_id: str) -> None:
+    def update_entity_id(
+        self, device_id: str, old_entity_id: str, new_entity_id: str
+    ) -> None:
         """Handle entity_id rename: update both maps."""
         info = self._forward.get(device_id)
         if info:
@@ -79,7 +94,7 @@ class DeviceMap:
     def is_tracked(self, entity_id: str) -> bool:
         return entity_id in self._reverse
 
-    def _add_device(self, device: Dict[str, Any]) -> None:
+    def _add_device(self, device: dict[str, Any]) -> None:
         device_id = device["device_id"]
         external_id = device.get("external_id", "")
         self._forward[device_id] = device
@@ -110,11 +125,13 @@ class DeviceMap:
                     self._device_identifiers_index.pop(key, None)
 
 
-def _identifiers_key(identifiers: Any) -> Optional[str]:
+def _identifiers_key(identifiers: Any) -> str | None:
     """Convert device_identifiers to a hashable key for indexing."""
     if isinstance(identifiers, list):
         try:
-            return str(sorted(tuple(i) if isinstance(i, list) else i for i in identifiers))
+            return str(
+                sorted(tuple(i) if isinstance(i, list) else i for i in identifiers)
+            )
         except TypeError:
             return str(identifiers)
     return str(identifiers) if identifiers else None
