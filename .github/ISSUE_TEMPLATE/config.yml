@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Staykey support
+    url: https://getstaykey.com/contact
+    about: Account, billing, or setup help for your Staykey subscription.
+  - name: Staykey community (Discord)
+    url: https://discord.gg/m2pA5PVzw
+    about: Ask questions and chat with other hosts.
