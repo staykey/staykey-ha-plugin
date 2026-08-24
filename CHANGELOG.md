@@ -1,3 +1,10 @@
+## [1.7.0](https://github.com/staykey/staykey-ha-plugin/compare/v1.6.0...v1.7.0) (2026-08-24)
+
+
+### Features
+
+* **staykey:** require gateway tokens; legacy webhook mode is retired ([#10](https://github.com/staykey/staykey-ha-plugin/issues/10)) ([9a27688](https://github.com/staykey/staykey-ha-plugin/commit/9a2768821d7977b63061f074520cabd38201fb53))
+
 ## [1.6.0](https://github.com/staykey/staykey-ha-plugin/compare/v1.5.0...v1.6.0) (2026-05-07)
 
 
