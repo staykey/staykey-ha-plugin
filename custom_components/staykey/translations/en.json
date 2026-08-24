@@ -4,16 +4,15 @@
     "step": {
       "user": {
         "title": "Configure Staykey",
-        "description": "Enter the gateway token from your Staykey dashboard to enable the gateway connection. Alternatively, provide a webhook URL for legacy mode.",
+        "description": "Enter the gateway token from your Staykey dashboard (Properties > Integrations > Home Assistant) to connect this Home Assistant instance to Staykey.",
         "data": {
           "gateway_token": "Gateway Token",
-          "gateway_url": "Gateway URL",
-          "endpoint_url": "Webhook URL (legacy)"
+          "gateway_url": "Gateway URL"
         }
       }
     },
     "error": {
-      "must_provide_token_or_url": "You must provide either a gateway token or a webhook URL."
+      "gateway_token_required": "A gateway token is required. Copy it from your Staykey dashboard under Properties > Integrations > Home Assistant."
     },
     "abort": {
       "already_configured": "This integration is already configured."
@@ -28,9 +27,15 @@
           "gateway_url": "Gateway URL",
           "verify_ssl": "Verify TLS certificates",
           "timeout": "Webhook timeout (seconds)",
-          "endpoint_url": "Webhook URL (legacy)"
+          "endpoint_url": "Webhook URL (deprecated - migrate to a gateway token)"
         }
       }
+    }
+  },
+  "issues": {
+    "webhook_mode_deprecated": {
+      "title": "Staykey webhook mode is deprecated",
+      "description": "This Staykey integration is configured to forward events over the legacy webhook, which Staykey has retired — lock events sent this way no longer reach Staykey. Copy the gateway token from your Staykey dashboard (Properties > Integrations > Home Assistant) and add it under Settings > Devices & Services > Staykey > Configure. The webhook URL can be removed once the gateway shows Connected."
     }
   }
 }

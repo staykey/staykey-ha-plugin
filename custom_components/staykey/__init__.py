@@ -15,6 +15,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.loader import async_get_integration
@@ -73,6 +74,36 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             "Staykey missing both gateway token and webhook URL; aborting setup"
         )
         return False
+
+    # Staykey has retired the legacy webhook endpoint in favor of the gateway
+    # connection. Webhook-only entries get a Repairs issue prompting
+    # migration; the issue clears once the entry has a gateway token.
+    webhook_issue_id = f"webhook_mode_deprecated_{entry.entry_id}"
+    if endpoint_url and not gateway_token:
+        LOGGER.warning(
+            "Staykey is configured in legacy webhook mode, but Staykey has "
+            "retired the webhook endpoint - events sent this way no longer "
+            "reach Staykey. Reconfigure the integration with a gateway token "
+            "from your Staykey dashboard (Properties > Integrations > Home "
+            "Assistant)"
+        )
+        ir.async_create_issue(
+            hass,
+            DOMAIN,
+            webhook_issue_id,
+            is_fixable=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="webhook_mode_deprecated",
+            learn_more_url="https://getstaykey.com/help/installing-staykey-hacs-plugin",
+        )
+    else:
+        ir.async_delete_issue(hass, DOMAIN, webhook_issue_id)
+        if endpoint_url:
+            LOGGER.info(
+                "Staykey legacy webhook URL is configured as a gateway "
+                "fallback, but Staykey has retired the webhook endpoint - "
+                "fallback sends will fail and the URL can be removed"
+            )
 
     verify_ssl: bool = options.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL)
     timeout_seconds: int = options.get(CONF_TIMEOUT, DEFAULT_TIMEOUT_SECONDS)
@@ -503,6 +534,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await gw.stop()
 
     return True
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Clean up when a config entry is removed for good."""
+    ir.async_delete_issue(hass, DOMAIN, f"webhook_mode_deprecated_{entry.entry_id}")
 
 
 async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:

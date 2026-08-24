@@ -81,25 +81,25 @@ class StaykeyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
+        # New installs are gateway-only: the legacy webhook URL is deprecated
+        # and no longer offered here. Existing webhook-mode entries keep
+        # working and can still manage the URL through the options flow.
         errors: dict[str, str] = {}
 
         if user_input is not None:
             gateway_token = user_input.get(CONF_GATEWAY_TOKEN, "").strip()
-            endpoint_url = user_input.get(CONF_ENDPOINT_URL, "").strip()
 
-            if not gateway_token and not endpoint_url:
-                errors["base"] = "must_provide_token_or_url"
+            if not gateway_token:
+                errors["base"] = "gateway_token_required"
             else:
-                unique_id = gateway_token or endpoint_url
-                await self.async_set_unique_id(unique_id)
+                await self.async_set_unique_id(gateway_token)
                 self._abort_if_unique_id_configured()
                 return self.async_create_entry(title="Staykey", data=user_input)
 
         data_schema = vol.Schema(
             {
-                vol.Optional(CONF_GATEWAY_TOKEN, default=""): str,
+                vol.Required(CONF_GATEWAY_TOKEN): str,
                 vol.Optional(CONF_GATEWAY_URL, default=DEFAULT_GATEWAY_URL): str,
-                vol.Optional(CONF_ENDPOINT_URL, default=""): str,
             }
         )
         return self.async_show_form(
