@@ -411,9 +411,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if gateway_client:
 
         async def handle_zwave_event_gateway(event: Event) -> None:
-            if not gateway_client.connected:
-                return
-
             d = event.data or {}
             entity_reg = er.async_get(hass)
             ha_device_id = d.get("device_id")
@@ -433,6 +430,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             if not sk_device_id:
                 return
 
+            LOGGER.debug("Forwarding %s for device %s", event.event_type, sk_device_id)
+
             await gateway_client.send_event(
                 "device_event", device_event_payload(event, sk_device_id)
             )
@@ -440,7 +439,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         for event_type in (
             ZWAVE_NOTIFICATION_EVENT,
             ZWAVE_VALUE_NOTIFICATION_EVENT,
-            ZWAVE_VALUE_UPDATED_EVENT,
         ):
             unsubscribers.append(
                 hass.bus.async_listen(event_type, handle_zwave_event_gateway)
