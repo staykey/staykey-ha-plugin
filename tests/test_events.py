@@ -1,0 +1,109 @@
+"""Tests for the gateway payload builders in ``events``."""
+
+from __future__ import annotations
+
+import datetime as dt
+import sys
+import uuid
+from pathlib import Path
+from types import SimpleNamespace
+
+sys.path.insert(
+    0, str(Path(__file__).resolve().parents[1] / "custom_components" / "staykey")
+)
+from events import device_event_payload, state_update_payload  # noqa: E402
+
+
+def _zwave_event(**overrides):
+    data = {
+        "device_id": "ha-dev-1",
+        "command_class": 113,
+        "command_class_name": "Notification",
+        "type": 6,
+        "event": 6,
+        "event_label": "Keypad unlock operation",
+        "parameters": {"userId": 3},
+    }
+    data.update(overrides.pop("data", {}))
+    fields = {
+        "event_type": "zwave_js_notification",
+        "data": data,
+        "time_fired": dt.datetime(
+            2026, 9, 15, 15, 42, 0, 250000, tzinfo=dt.timezone.utc
+        ),
+    }
+    fields.update(overrides)
+    return SimpleNamespace(**fields)
+
+
+class TestDeviceEventPayload:
+    def test_carries_the_raw_notification(self):
+        payload = device_event_payload(_zwave_event(), "sk-device-1")
+
+        assert uuid.UUID(payload["event_id"])
+        assert payload["device_id"] == "sk-device-1"
+        assert payload["protocol"] == "zwave"
+        assert payload["source_event"] == "zwave_js_notification"
+        assert payload["notification_type"] == 6
+        assert payload["code"] == 6
+        assert payload["label"] == "Keypad unlock operation"
+        assert payload["params"] == {"userId": 3}
+        assert payload["timestamp"] == "2026-09-15T15:42:00.250000Z"
+
+    def test_each_call_gets_a_fresh_event_id(self):
+        ev = _zwave_event()
+        a = device_event_payload(ev, "sk")["event_id"]
+        b = device_event_payload(ev, "sk")["event_id"]
+        assert a != b
+
+    def test_missing_fields_are_tolerated(self):
+        ev = _zwave_event(
+            time_fired=None, data={"parameters": None, "event_label": None}
+        )
+        payload = device_event_payload(ev, "sk")
+        assert payload["timestamp"] is None
+        assert payload["params"] == {}
+        assert payload["label"] is None
+
+    def test_non_utc_time_is_converted(self):
+        tz = dt.timezone(dt.timedelta(hours=-6))
+        ev = _zwave_event(time_fired=dt.datetime(2026, 9, 15, 9, 42, tzinfo=tz))
+        assert device_event_payload(ev, "sk")["timestamp"] == "2026-09-15T15:42:00Z"
+
+    def test_value_notification_events_keep_their_source(self):
+        ev = _zwave_event(
+            event_type="zwave_js_value_notification", data={"type": None, "event": None}
+        )
+        payload = device_event_payload(ev, "sk")
+        assert payload["source_event"] == "zwave_js_value_notification"
+        assert payload["notification_type"] is None and payload["code"] is None
+
+
+class TestStateUpdatePayload:
+    def _state(self, attributes=None, ctx_id="ctx-1"):
+        return SimpleNamespace(
+            state="unlocked",
+            attributes=attributes or {},
+            last_changed=dt.datetime(2026, 9, 15, 15, 42, tzinfo=dt.timezone.utc),
+            context=SimpleNamespace(id=ctx_id),
+        )
+
+    def test_carries_state_time_and_context_id(self):
+        payload = state_update_payload(self._state())
+        assert payload == {
+            "state": "unlocked",
+            "last_changed": "2026-09-15T15:42:00+00:00",
+            "event_id": "ctx-1",
+        }
+
+    def test_battery_only_when_present(self):
+        assert "battery_level" not in state_update_payload(self._state())
+        assert (
+            state_update_payload(self._state({"battery_level": 40}))["battery_level"]
+            == 40
+        )
+
+    def test_missing_context_yields_no_event_id(self):
+        state = self._state()
+        state.context = None
+        assert state_update_payload(state)["event_id"] is None
