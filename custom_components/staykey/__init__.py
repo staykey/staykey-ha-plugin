@@ -35,6 +35,7 @@ from .const import (
     ZWAVE_VALUE_UPDATED_EVENT,
 )
 from .device_map import DeviceMap
+from .events import device_event_payload, state_update_payload
 from .gateway.client import GatewayClient
 from .services.ha_bridge import create_command_handler
 from .state_filter import should_forward_state
@@ -168,18 +169,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
             last_sent_states[entity_id] = state_value
 
-            state_data: dict[str, Any] = {
-                "state": state_value,
-                "last_changed": (
-                    new_state.last_changed.isoformat()
-                    if new_state.last_changed
-                    else None
-                ),
-            }
-            if "battery_level" in attrs:
-                state_data["battery_level"] = attrs["battery_level"]
-
-            await gateway_client.send_state_update(sk_device_id, state_data)
+            await gateway_client.send_state_update(
+                sk_device_id, state_update_payload(new_state)
+            )
 
         unsubscribers.append(
             hass.bus.async_listen("state_changed", handle_state_changed)
@@ -423,11 +415,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 return
 
             d = event.data or {}
-
-            dr.async_get(hass)
             entity_reg = er.async_get(hass)
             ha_device_id = d.get("device_id")
-            entity_id: str | None = None
             sk_device_id: str | None = None
 
             if ha_device_id:
@@ -439,51 +428,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     lock_entities[0] if lock_entities else (ents[0] if ents else None)
                 )
                 if chosen:
-                    entity_id = chosen.entity_id
-                    sk_device_id = device_map.get_device_id(entity_id)
+                    sk_device_id = device_map.get_device_id(chosen.entity_id)
 
             if not sk_device_id:
                 return
 
-            params = d.get("parameters") or {}
-            code_slot = (
-                params.get("codeId") or params.get("userId") or d.get("code_slot")
-            )
-            evt_id = d.get("event")
-            if evt_id in (1, 2):
-                method = "manual"
-            elif evt_id == 6:
-                method = "keypad"
-            else:
-                method = "unknown"
-
-            raw_label = (d.get("event_label") or "").strip()
-            lower_label = raw_label.lower()
-            result = (
-                "failure"
-                if any(x in lower_label for x in ("fail", "error", "invalid"))
-                else "success"
-            )
-
-            time_fired = getattr(event, "time_fired", None)
-            timestamp = None
-            if time_fired:
-                timestamp = (
-                    time_fired.astimezone(timezone.utc)
-                    .isoformat()
-                    .replace("+00:00", "Z")
-                )
-
             await gateway_client.send_event(
-                "lock_activity",
-                {
-                    "device_id": sk_device_id,
-                    "action": raw_label or event.event_type,
-                    "method": method,
-                    "code_slot": code_slot,
-                    "result": result,
-                    "timestamp": timestamp,
-                },
+                "device_event", device_event_payload(event, sk_device_id)
             )
 
         for event_type in (
@@ -501,7 +452,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # events, but Home Assistant's Matter integration (through 2026.4) does
     # not yet expose them on hass.bus like Z-Wave notification events.
     # The entity mostly updates `locked`/`unlocked`, so forwarded
-    # `lock_activity` is lower fidelity than Z-Wave. Programming operations
+    # activity is lower fidelity than Z-Wave. Programming operations
     # still return structured success/failure in their service responses;
     # richer keypad history awaits upstream HA event coverage.
 

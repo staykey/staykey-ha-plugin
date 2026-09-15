@@ -21,3 +21,17 @@ DEFAULT_GATEWAY_URL: str = "wss://api.staykey.co/orion/gateway/websocket"
 ZWAVE_NOTIFICATION_EVENT: str = "zwave_js_notification"
 ZWAVE_VALUE_NOTIFICATION_EVENT: str = "zwave_js_value_notification"
 ZWAVE_VALUE_UPDATED_EVENT: str = "zwave_js_value_updated"
+
+# Features advertised to the gateway in the capabilities handshake.
+GATEWAY_FEATURES: tuple[str, ...] = (
+    "lock_control",
+    "access_code_management",
+    "zwave_code_slots",
+    "state_streaming",
+    "device_discovery",
+    "capability_discovery",
+    "health_monitoring",
+    "diagnostics",
+    "batch_operations",
+    "raw_device_events",
+)
