@@ -285,8 +285,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             if not _is_lock_event(event):
                 return
 
-            # If gateway is connected, let it handle events instead
-            if gateway_client and gateway_client.connected:
+            # A gateway client forwards every event and buffers them while
+            # disconnected, so the webhook path only runs in webhook-only mode.
+            if gateway_client:
                 return
 
             origin = getattr(event, "origin", None)
