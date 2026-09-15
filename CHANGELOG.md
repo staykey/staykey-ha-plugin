@@ -1,3 +1,16 @@
+## [1.8.0-beta.1](https://github.com/staykey/staykey-ha-plugin/compare/v1.7.0...v1.8.0-beta.1) (2026-09-15)
+
+
+### Features
+
+* **staykey:** add builders for raw device event and state update payloads ([ba77a62](https://github.com/staykey/staykey-ha-plugin/commit/ba77a62edc2d83f413bc2a4208a277f2fd54292f))
+* **staykey:** forward raw device events with ids and advertise the feature ([bdcfc32](https://github.com/staykey/staykey-ha-plugin/commit/bdcfc3216721d1c38dfaba0a624ac0841e78351c))
+
+
+### Bug Fixes
+
+* **staykey:** carry raw event data, per-delivery state ids, and queue device events offline ([56c2dfa](https://github.com/staykey/staykey-ha-plugin/commit/56c2dfaf24f6aa368c3e65a72a8298c3f0b71cfd))
+
 ## [1.7.0](https://github.com/staykey/staykey-ha-plugin/compare/v1.6.0...v1.7.0) (2026-08-24)
 
 
