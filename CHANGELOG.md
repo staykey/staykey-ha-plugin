@@ -1,3 +1,10 @@
+## [1.8.0](https://github.com/staykey/staykey-ha-plugin/compare/v1.7.0...v1.8.0) (2026-09-16)
+
+
+### Features
+
+* **staykey:** forward device events with ids for the activity feed ([#11](https://github.com/staykey/staykey-ha-plugin/issues/11)) ([c4d7ccd](https://github.com/staykey/staykey-ha-plugin/commit/c4d7ccd9a33f08bda327ed4ef8a2329c624a38f7))
+
 ## [1.7.0](https://github.com/staykey/staykey-ha-plugin/compare/v1.6.0...v1.7.0) (2026-08-24)
 
 
