@@ -1,3 +1,11 @@
+## [1.8.0-beta.2](https://github.com/staykey/staykey-ha-plugin/compare/v1.8.0-beta.1...v1.8.0-beta.2) (2026-09-16)
+
+
+### Bug Fixes
+
+* **staykey:** compare against the previous state so attribute changes are not re-sent ([7375fab](https://github.com/staykey/staykey-ha-plugin/commit/7375fab4838d9754432a09c5c08b941f59d569e0))
+* **staykey:** skip the webhook path whenever a gateway client exists ([6e64aa2](https://github.com/staykey/staykey-ha-plugin/commit/6e64aa2cc56aba8035979798495a2dea5d3dd6ba))
+
 ## [1.8.0-beta.1](https://github.com/staykey/staykey-ha-plugin/compare/v1.7.0...v1.8.0-beta.1) (2026-09-15)
 
 
