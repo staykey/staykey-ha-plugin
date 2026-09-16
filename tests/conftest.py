@@ -87,3 +87,73 @@ def _async_get(_):  # noqa: D401 - stub function
 
 sys.modules["homeassistant.helpers.device_registry"].async_get = _async_get
 sys.modules["homeassistant.helpers.entity_registry"].async_get = _async_get
+
+
+# ``custom_components/staykey/__init__.py`` reaches for a few more HA
+# modules at import time; tests that drive the config entry setup need
+# those present too.
+_ensure_module("homeassistant.config_entries")
+_ensure_module("homeassistant.const")
+_ensure_module("homeassistant.helpers.aiohttp_client")
+_ensure_module("homeassistant.helpers.issue_registry")
+_ensure_module("homeassistant.helpers.typing")
+_ensure_module("homeassistant.loader")
+
+
+class _ConfigEntry:  # noqa: D401 - stub class
+    """Stand-in for ``homeassistant.config_entries.ConfigEntry``."""
+
+
+class _Event:  # noqa: D401 - stub class
+    """Stand-in for ``homeassistant.core.Event``."""
+
+
+class _State:  # noqa: D401 - stub class
+    """Stand-in for ``homeassistant.core.State``."""
+
+
+sys.modules["homeassistant.config_entries"].ConfigEntry = _ConfigEntry
+sys.modules["homeassistant.const"].__version__ = "0.0.0"
+sys.modules["homeassistant.core"].CALLBACK_TYPE = object
+sys.modules["homeassistant.core"].Event = _Event
+sys.modules["homeassistant.core"].State = _State
+sys.modules["homeassistant.helpers.typing"].ConfigType = dict
+
+
+def _async_get_clientsession(_hass):  # noqa: D401 - stub function
+    """Stand-in for HA's shared aiohttp session accessor."""
+    raise RuntimeError("aiohttp_client.async_get_clientsession is stubbed in tests")
+
+
+_aiohttp_client = sys.modules["homeassistant.helpers.aiohttp_client"]
+_aiohttp_client.async_get_clientsession = _async_get_clientsession
+
+
+def _noop_issue(*_args, **_kwargs):  # noqa: D401 - stub function
+    """Stand-in for the Repairs issue registry helpers."""
+
+
+_issue_registry = sys.modules["homeassistant.helpers.issue_registry"]
+_issue_registry.async_create_issue = _noop_issue
+_issue_registry.async_delete_issue = _noop_issue
+_issue_registry.IssueSeverity = types.SimpleNamespace(WARNING="warning")
+
+
+async def _async_get_integration(_hass, _domain):  # noqa: D401 - stub function
+    """Stand-in for ``homeassistant.loader.async_get_integration``."""
+    return types.SimpleNamespace(version="0.0.0")
+
+
+sys.modules["homeassistant.loader"].async_get_integration = _async_get_integration
+
+
+# Only the exception type the webhook path catches is needed; leave a real
+# aiohttp alone if the environment happens to have one installed.
+try:
+    import aiohttp  # noqa: E402, F401
+except ImportError:
+
+    class _ClientError(Exception):
+        """Stand-in for ``aiohttp.ClientError``."""
+
+    _ensure_module("aiohttp").ClientError = _ClientError

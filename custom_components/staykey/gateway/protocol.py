@@ -12,7 +12,9 @@ def generate_id() -> str:
 
 
 def encode(message: dict[str, Any]) -> str:
-    return json.dumps(message, separators=(",", ":"))
+    # ``default=str`` keeps an unexpected non-JSON value in forwarded event
+    # data from raising inside a bus listener; it degrades to a string.
+    return json.dumps(message, separators=(",", ":"), default=str)
 
 
 def decode(text: str) -> dict[str, Any]:

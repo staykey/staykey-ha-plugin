@@ -35,6 +35,7 @@ from .const import (
     ZWAVE_VALUE_UPDATED_EVENT,
 )
 from .device_map import DeviceMap
+from .events import device_event_payload, state_update_payload
 from .gateway.client import GatewayClient
 from .services.ha_bridge import create_command_handler
 from .state_filter import should_forward_state
@@ -114,7 +115,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unsubscribers: list[CALLBACK_TYPE] = []
     gateway_client: GatewayClient | None = None
     device_map = DeviceMap()
-    last_sent_states: dict[str, str] = {}
 
     # --- Gateway mode ---
     if gateway_token:
@@ -133,7 +133,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await gateway_client.start()
         LOGGER.info("Staykey gateway client started (url=%s)", gateway_url)
 
-        # State streaming: push state_changed events for tracked entities
+        # State streaming: push state_changed events for tracked entities.
+        #
+        # The listener stays on the global state_changed bus rather than
+        # being scoped to the tracked entities: the device map changes while
+        # the integration is running (entity renames, device reconcile), so a
+        # scoped subscription would have to be torn down and rebuilt on every
+        # one of those changes.
         async def handle_state_changed(event: Event) -> None:
             entity_id = event.data.get("entity_id", "")
             if not device_map.is_tracked(entity_id):
@@ -147,7 +153,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             if not new_state:
                 return
 
-            # Battery/health alerts fire regardless of state filtering
+            # Battery/health alerts fire regardless of state filtering, and
+            # must stay ahead of it: a battery report is exactly the
+            # attribute-only event the filter below drops, so only the state
+            # forward is skipped for one, never the alert.
             attrs = new_state.attributes or {}
             if "battery_level" in attrs:
                 battery = attrs["battery_level"]
@@ -160,26 +169,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         },
                     )
 
-            state_value = new_state.state
-            if not should_forward_state(
-                entity_id, state_value, last_sent_states.get(entity_id)
-            ):
+            old_state = event.data.get("old_state")
+            if old_state is None:
+                # No previous state means Home Assistant is restoring the
+                # entity (startup, or a config entry reload), not reporting a
+                # change. A restart is already signalled once through the
+                # homeassistant_started health alert, so it does not also
+                # arrive as a burst of state updates.
                 return
 
-            last_sent_states[entity_id] = state_value
+            # Compare against the state the event itself carries rather than
+            # against a remembered one: nothing survives a restart or a
+            # reload to compare with, and a hub with two config entries would
+            # hold two separate memories of it.
+            if not should_forward_state(entity_id, new_state.state, old_state.state):
+                return
 
-            state_data: dict[str, Any] = {
-                "state": state_value,
-                "last_changed": (
-                    new_state.last_changed.isoformat()
-                    if new_state.last_changed
-                    else None
-                ),
-            }
-            if "battery_level" in attrs:
-                state_data["battery_level"] = attrs["battery_level"]
-
-            await gateway_client.send_state_update(sk_device_id, state_data)
+            await gateway_client.send_state_update(
+                sk_device_id, state_update_payload(new_state)
+            )
 
         unsubscribers.append(
             hass.bus.async_listen("state_changed", handle_state_changed)
@@ -293,8 +301,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             if not _is_lock_event(event):
                 return
 
-            # If gateway is connected, let it handle events instead
-            if gateway_client and gateway_client.connected:
+            # A gateway client forwards every event and buffers them while
+            # disconnected, so the webhook path only runs in webhook-only mode.
+            if gateway_client:
                 return
 
             origin = getattr(event, "origin", None)
@@ -419,15 +428,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if gateway_client:
 
         async def handle_zwave_event_gateway(event: Event) -> None:
-            if not gateway_client.connected:
-                return
-
             d = event.data or {}
-
-            dr.async_get(hass)
             entity_reg = er.async_get(hass)
             ha_device_id = d.get("device_id")
-            entity_id: str | None = None
             sk_device_id: str | None = None
 
             if ha_device_id:
@@ -439,57 +442,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     lock_entities[0] if lock_entities else (ents[0] if ents else None)
                 )
                 if chosen:
-                    entity_id = chosen.entity_id
-                    sk_device_id = device_map.get_device_id(entity_id)
+                    sk_device_id = device_map.get_device_id(chosen.entity_id)
 
             if not sk_device_id:
                 return
 
-            params = d.get("parameters") or {}
-            code_slot = (
-                params.get("codeId") or params.get("userId") or d.get("code_slot")
-            )
-            evt_id = d.get("event")
-            if evt_id in (1, 2):
-                method = "manual"
-            elif evt_id == 6:
-                method = "keypad"
-            else:
-                method = "unknown"
-
-            raw_label = (d.get("event_label") or "").strip()
-            lower_label = raw_label.lower()
-            result = (
-                "failure"
-                if any(x in lower_label for x in ("fail", "error", "invalid"))
-                else "success"
-            )
-
-            time_fired = getattr(event, "time_fired", None)
-            timestamp = None
-            if time_fired:
-                timestamp = (
-                    time_fired.astimezone(timezone.utc)
-                    .isoformat()
-                    .replace("+00:00", "Z")
-                )
+            LOGGER.debug("Forwarding %s for device %s", event.event_type, sk_device_id)
 
             await gateway_client.send_event(
-                "lock_activity",
-                {
-                    "device_id": sk_device_id,
-                    "action": raw_label or event.event_type,
-                    "method": method,
-                    "code_slot": code_slot,
-                    "result": result,
-                    "timestamp": timestamp,
-                },
+                "device_event", device_event_payload(event, sk_device_id)
             )
 
         for event_type in (
             ZWAVE_NOTIFICATION_EVENT,
             ZWAVE_VALUE_NOTIFICATION_EVENT,
-            ZWAVE_VALUE_UPDATED_EVENT,
         ):
             unsubscribers.append(
                 hass.bus.async_listen(event_type, handle_zwave_event_gateway)
@@ -501,7 +467,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # events, but Home Assistant's Matter integration (through 2026.4) does
     # not yet expose them on hass.bus like Z-Wave notification events.
     # The entity mostly updates `locked`/`unlocked`, so forwarded
-    # `lock_activity` is lower fidelity than Z-Wave. Programming operations
+    # activity is lower fidelity than Z-Wave. Programming operations
     # still return structured success/failure in their service responses;
     # richer keypad history awaits upstream HA event coverage.
 
@@ -509,7 +475,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "unsub": unsubscribers,
         "gateway_client": gateway_client,
         "device_map": device_map,
-        "last_sent_states": last_sent_states,
     }
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))

@@ -15,6 +15,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
+from ..const import GATEWAY_FEATURES
 from ..device_map import DeviceMap
 from . import protocol
 from .event_queue import EventQueue
@@ -212,17 +213,7 @@ class GatewayClient:
             LOGGER.info("Updated config entry title to %r", property_name)
 
         ha_version = HA_VERSION
-        features = [
-            "lock_control",
-            "access_code_management",
-            "zwave_code_slots",
-            "state_streaming",
-            "device_discovery",
-            "capability_discovery",
-            "health_monitoring",
-            "diagnostics",
-            "batch_operations",
-        ]
+        features = list(GATEWAY_FEATURES)
 
         await self._ws.send_str(
             protocol.capabilities_message(
