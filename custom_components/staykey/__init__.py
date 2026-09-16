@@ -115,7 +115,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unsubscribers: list[CALLBACK_TYPE] = []
     gateway_client: GatewayClient | None = None
     device_map = DeviceMap()
-    last_sent_states: dict[str, str] = {}
 
     # --- Gateway mode ---
     if gateway_token:
@@ -134,7 +133,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await gateway_client.start()
         LOGGER.info("Staykey gateway client started (url=%s)", gateway_url)
 
-        # State streaming: push state_changed events for tracked entities
+        # State streaming: push state_changed events for tracked entities.
+        #
+        # The listener stays on the global state_changed bus rather than
+        # being scoped to the tracked entities: the device map changes while
+        # the integration is running (entity renames, device reconcile), so a
+        # scoped subscription would have to be torn down and rebuilt on every
+        # one of those changes.
         async def handle_state_changed(event: Event) -> None:
             entity_id = event.data.get("entity_id", "")
             if not device_map.is_tracked(entity_id):
@@ -148,7 +153,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             if not new_state:
                 return
 
-            # Battery/health alerts fire regardless of state filtering
+            # Battery/health alerts fire regardless of state filtering, and
+            # must stay ahead of it: a battery report is exactly the
+            # attribute-only event the filter below drops, so only the state
+            # forward is skipped for one, never the alert.
             attrs = new_state.attributes or {}
             if "battery_level" in attrs:
                 battery = attrs["battery_level"]
@@ -161,13 +169,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         },
                     )
 
-            state_value = new_state.state
-            if not should_forward_state(
-                entity_id, state_value, last_sent_states.get(entity_id)
-            ):
+            old_state = event.data.get("old_state")
+            if old_state is None:
+                # No previous state means Home Assistant is restoring the
+                # entity (startup, or a config entry reload), not reporting a
+                # change. A restart is already signalled once through the
+                # homeassistant_started health alert, so it does not also
+                # arrive as a burst of state updates.
                 return
 
-            last_sent_states[entity_id] = state_value
+            # Compare against the state the event itself carries rather than
+            # against a remembered one: nothing survives a restart or a
+            # reload to compare with, and a hub with two config entries would
+            # hold two separate memories of it.
+            if not should_forward_state(entity_id, new_state.state, old_state.state):
+                return
 
             await gateway_client.send_state_update(
                 sk_device_id, state_update_payload(new_state)
@@ -459,7 +475,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "unsub": unsubscribers,
         "gateway_client": gateway_client,
         "device_map": device_map,
-        "last_sent_states": last_sent_states,
     }
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
