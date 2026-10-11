@@ -1,3 +1,10 @@
+## [1.8.1](https://github.com/staykey/staykey-ha-plugin/compare/v1.8.0...v1.8.1) (2026-10-11)
+
+
+### Bug Fixes
+
+* **staykey:** pass HACS and hassfest validation ([#13](https://github.com/staykey/staykey-ha-plugin/issues/13)) ([7c450e1](https://github.com/staykey/staykey-ha-plugin/commit/7c450e19be3ec389cc380862bb3d6eef00a06ac2))
+
 ## [1.8.0](https://github.com/staykey/staykey-ha-plugin/compare/v1.7.0...v1.8.0) (2026-09-16)
 
 
