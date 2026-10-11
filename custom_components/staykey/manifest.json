@@ -1,11 +1,6 @@
 {
   "domain": "staykey",
   "name": "Staykey",
-  "version": "1.8.0",
-  "documentation": "https://github.com/staykey/staykey-ha-plugin",
-  "issue_tracker": "https://github.com/staykey/staykey-ha-plugin/issues",
-  "homeassistant": "2026.4.0",
-  "requirements": [],
   "after_dependencies": [
     "zwave_js",
     "matter"
@@ -13,10 +8,14 @@
   "codeowners": [
     "@staykey"
   ],
-  "iot_class": "cloud_push",
-  "integration_type": "service",
   "config_flow": true,
+  "documentation": "https://github.com/staykey/staykey-ha-plugin",
+  "integration_type": "service",
+  "iot_class": "cloud_push",
+  "issue_tracker": "https://github.com/staykey/staykey-ha-plugin/issues",
   "loggers": [
     "custom_components.staykey"
-  ]
+  ],
+  "requirements": [],
+  "version": "1.8.0"
 }

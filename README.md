@@ -3,7 +3,7 @@
 [![CI](https://github.com/staykey/staykey-ha-plugin/actions/workflows/ci.yml/badge.svg)](https://github.com/staykey/staykey-ha-plugin/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/staykey/staykey-ha-plugin?sort=semver)](https://github.com/staykey/staykey-ha-plugin/releases)
 [![HACS](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
-[![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.6%2B-41BDF5.svg)](https://www.home-assistant.io/)
+[![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2026.4%2B-41BDF5.svg)](https://www.home-assistant.io/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 Staykey is a Home Assistant integration for short-term and vacation rental hosts. It connects your Airbnb and VRBO turnovers to local smart-home hardware — automating guest access on Z-Wave, Zigbee, and Matter smart locks, plus thermostats, covers, switches, and more — and streams lock and device events back to your [Staykey](https://getstaykey.com) account through a secure, persistent connection, local-first with no vendor cloud lock-in.
@@ -21,7 +21,7 @@ Learn more at [getstaykey.com](https://getstaykey.com).
 
 ## Requirements
 
-- Home Assistant 2024.6 or newer
+- Home Assistant 2026.4 or newer
 - HACS installed
 - A Staykey account with a gateway token (provided by Staykey)
 - Z-Wave JS integration (if managing Z-Wave locks)
