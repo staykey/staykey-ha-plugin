@@ -71,7 +71,8 @@ After a release, confirm: the new GitHub release exists, the tag is present, `CH
 
 Recurring upkeep for the repository:
 
-- **Keep the minimum Home Assistant version current.** It is declared in two places that must stay consistent: `homeassistant` in `custom_components/staykey/manifest.json` and `homeassistant` in `hacs.json`. Bump them together when you raise the floor.
+- **Keep the minimum Home Assistant version current.** HACS enforces the `homeassistant` key in `hacs.json`; users on an older Home Assistant are not offered the update. Do not add a `homeassistant` key to `custom_components/staykey/manifest.json` — it is not a valid manifest key and fails hassfest. When you raise the floor, also update the version badge and the **Requirements** list in `README.md`.
+- **Keep the Validate workflow green.** `.github/workflows/validate.yml` runs the HACS action and hassfest on every pull request, on pushes to `main`, and weekly. The weekly run catches new upstream checks before they affect the HACS default store listing.
 - **Review security alerts and dependency updates.** Triage Dependabot / security advisories on the repository and update the Node devDependencies used by the release tooling in `package.json`.
 - **Triage issues and pull requests** on a regular cadence; label, respond, and close stale items.
 - **Prune merged branches.** Auto-delete handles PR branches; periodically clean up any leftover `rc/*` and `beta/*` prerelease branches once their builds are no longer needed.
@@ -79,28 +80,28 @@ Recurring upkeep for the repository:
 
 ## Submitting to the HACS default store
 
-Today the integration installs as a HACS **custom repository** (users add the repo URL manually). Listing it in the HACS default store is a one-time process that requires two external pull requests. These can only be done by someone able to open PRs against the upstream Home Assistant / HACS repositories.
+Today the integration installs as a HACS **custom repository**: users add the repository URL by hand. Listing it in the HACS default store puts it in the community catalog, so users can search for and install it directly. From Home Assistant 2026.11, HACS is built into Home Assistant as the **Marketplace**, which uses the same catalog. In the Marketplace, adding a custom repository requires connecting a GitHub account, so a catalog listing matters more from that release on. When the catalog starts listing a repository that users added as a custom repository, HACS and the Marketplace switch those installs over automatically.
 
-### Prerequisites (already satisfied)
+Listing is a one-time pull request to the `hacs/default` repository.
 
-- Public GitHub repository with a description and topics set.
-- At least one published GitHub release (the automated release flow above provides this).
-- A valid `hacs.json` and a valid `custom_components/staykey/manifest.json` with `domain`, `name`, `documentation`, `issue_tracker`, `codeowners`, and `version`.
-- A `README.md` and an `info.md`.
+### Requirements
 
-### Step 1 — Add the brand assets
+Validation runs on every PR, push to `main`, and weekly in `.github/workflows/validate.yml`, using the HACS action and hassfest. Both must pass with no ignored checks. The HACS checks cover:
 
-Open a PR against **https://github.com/home-assistant/brands** adding the Staykey icon (and logo) under the custom integrations path:
+- A public GitHub repository with a description, topics, issues enabled, and an OSI-approved license. Archived repositories are rejected.
+- A valid `hacs.json`. Only the keys HACS documents are allowed. The `country` key, if set, must use ISO 3166-1 alpha-2 codes.
+- A valid `custom_components/staykey/manifest.json` with `domain`, `name`, `documentation`, `issue_tracker`, `codeowners`, and `version`.
+- Brand images in `custom_components/staykey/brand/`. At least `icon.png` must exist. `dark_icon.png` is the dark-theme variant. Since Home Assistant 2026.3, these local images are used directly, so no pull request to the `home-assistant/brands` repository is needed.
+- A `README.md`.
 
-- `custom_integrations/staykey/icon.png`
-- `custom_integrations/staykey/logo.png` (optional but recommended)
+### Submitting
 
-Follow that repository's image size and format requirements (square icon, transparent background, PNG). The `staykey` directory name must match the integration `domain` in `manifest.json`.
+1. Confirm the latest Validate run on `main` is green.
+2. Publish a full GitHub release **after** that run. HACS requires a release, not just a tag, created after validation passes. The normal release flow above does this when a `feat:` or `fix:` commit merges.
+3. From a **personal** GitHub account, fork `hacs/default` and create a branch from `master`. HACS does not accept submissions from organization forks, because maintainers can't edit those PRs. The submitter must be a repository owner or major contributor.
+4. Add `staykey/staykey-ha-plugin` to the `integration` file. The list is sorted alphabetically, so insert the entry in its sorted position, not at the end.
+5. Open the pull request and fill in its template completely: link the release, the successful HACS action run, and the successful hassfest run. Do not request reviews; HACS closes pull requests that do.
 
-### Step 2 — Add the repository to the HACS default list
+### After submitting
 
-Open a PR against **https://github.com/hacs/default** adding `staykey/staykey-ha-plugin` to the **`integration`** list (the file is sorted; insert it in the correct position). HACS validation runs against the repository to confirm the prerequisites above.
-
-### Note
-
-HACS maintainers review and merge default-store submissions on their own schedule. The brands PR is typically expected to be merged (or in flight) before the `hacs/default` PR is accepted. Once both land, users can install Staykey directly from the HACS default store without adding a custom repository.
+HACS maintainers review submissions in order, and the queue can take several months. Keep the Validate workflow green while the PR is open, because a failing check gets the PR moved back to draft. Once it merges, the repository appears in the next catalog scan. Then update the installation steps in `README.md` and the badge, replacing the custom-repository instructions with a search for **Staykey** in HACS or the Marketplace.

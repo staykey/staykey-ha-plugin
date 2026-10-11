@@ -95,6 +95,7 @@ sys.modules["homeassistant.helpers.entity_registry"].async_get = _async_get
 _ensure_module("homeassistant.config_entries")
 _ensure_module("homeassistant.const")
 _ensure_module("homeassistant.helpers.aiohttp_client")
+_ensure_module("homeassistant.helpers.config_validation")
 _ensure_module("homeassistant.helpers.issue_registry")
 _ensure_module("homeassistant.helpers.typing")
 _ensure_module("homeassistant.loader")
@@ -127,6 +128,15 @@ def _async_get_clientsession(_hass):  # noqa: D401 - stub function
 
 _aiohttp_client = sys.modules["homeassistant.helpers.aiohttp_client"]
 _aiohttp_client.async_get_clientsession = _async_get_clientsession
+
+
+def _config_entry_only_config_schema(_domain):  # noqa: D401 - stub function
+    """Stand-in for ``config_validation.config_entry_only_config_schema``."""
+    return dict
+
+
+_config_validation = sys.modules["homeassistant.helpers.config_validation"]
+_config_validation.config_entry_only_config_schema = _config_entry_only_config_schema
 
 
 def _noop_issue(*_args, **_kwargs):  # noqa: D401 - stub function
