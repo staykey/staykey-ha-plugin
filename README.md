@@ -12,7 +12,7 @@ Learn more at [getstaykey.com](https://getstaykey.com).
 
 ## Features
 
-- **Gateway mode** — persistent WebSocket connection to Staykey for real-time, two-way device control and state streaming
+- **Gateway connection** — a persistent WebSocket connection to Staykey for real-time, two-way device control and state streaming
 - **Automatic device discovery** — Staykey discovers supported devices (locks, climate, covers, switches, lights, sensors) from your Home Assistant instance
 - **Z-Wave lock support** — keypad code management, lock/unlock, and activity event forwarding
 - **State streaming** — device state changes are forwarded to Staykey in real time
@@ -54,7 +54,7 @@ Available options:
 |------|-------------|
 | Locks | Lock, unlock, user code management, activity events |
 | Climate | Set temperature, set HVAC mode |
-| Covers | Open, close, stop |
+| Covers | Open, close |
 | Switches | Turn on, turn off |
 | Lights | Turn on, turn off |
 | Sensors | State reporting |
@@ -77,7 +77,7 @@ The integration connects only through the gateway; webhook mode has been removed
 - Troubleshooting commands (any service call, reading the codes stored on your locks, watching the event bus) are refused unless you turn on **Allow support actions**
 - No passwords, personal data, or network details are shared
 - The gateway token uniquely identifies your Home Assistant instance to your Staykey account
-- Each connection also sends your Home Assistant installation ID, the random identifier Home Assistant creates once when it is installed. Every Staykey entry on the same Home Assistant sends the same ID, which lets Staykey recognise a lock shared by two properties as one lock
+- Each connection also sends your Home Assistant installation ID, a random identifier Home Assistant keeps for this installation. Every Staykey entry on the same Home Assistant sends the same ID, which lets Staykey recognise a lock shared by two properties as one lock
 
 ## Troubleshooting
 
