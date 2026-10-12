@@ -1,3 +1,15 @@
+## [2.0.0](https://github.com/staykey/staykey-ha-plugin/compare/v1.8.1...v2.0.0) (2026-10-12)
+
+
+### ⚠ BREAKING CHANGES
+
+* **staykey:** gateway mode is now required. An entry set up with only a webhook URL no longer loads. Copy the gateway token from the Staykey dashboard (Properties > Integrations > Home Assistant) and add it under Settings > Devices & Services > Staykey > Configure.
+* **staykey:** Staykey support can no longer run debugging commands on your Home Assistant unless you turn on the new Allow support access option, which is off by default. Staykey doesn't need them to run your properties.
+
+### Features
+
+* **staykey:** harden device access and remove webhook mode ([1d6d2b3](https://github.com/staykey/staykey-ha-plugin/commit/1d6d2b35034be61f4ac6124123c638b60163b1c7))
+
 ## [2.0.0-beta.4](https://github.com/staykey/staykey-ha-plugin/compare/v2.0.0-beta.3...v2.0.0-beta.4) (2026-10-12)
 
 
