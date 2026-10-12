@@ -10,20 +10,21 @@ from homeassistant.data_entry_flow import FlowResult
 
 from .const import (
     CONF_ALLOW_SUPPORT_ACTIONS,
-    CONF_ENDPOINT_URL,
     CONF_GATEWAY_TOKEN,
     CONF_GATEWAY_URL,
-    CONF_TIMEOUT,
-    CONF_VERIFY_SSL,
     DEFAULT_ALLOW_SUPPORT_ACTIONS,
     DEFAULT_GATEWAY_URL,
-    DEFAULT_TIMEOUT_SECONDS,
-    DEFAULT_VERIFY_SSL,
     DOMAIN,
 )
 
 
-class StaykeyOptionsFlowHandler(config_entries.OptionsFlow):
+class StaykeyOptionsFlowHandler(config_entries.OptionsFlowWithReload):
+    """Options for a Staykey entry.
+
+    Saving the form reloads the entry. That also brings back an entry whose
+    setup stopped for want of a gateway token, as soon as one is added here.
+    """
+
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
@@ -55,21 +56,6 @@ class StaykeyOptionsFlowHandler(config_entries.OptionsFlow):
                         CONF_ALLOW_SUPPORT_ACTIONS, DEFAULT_ALLOW_SUPPORT_ACTIONS
                     ),
                 ): bool,
-                vol.Optional(
-                    CONF_VERIFY_SSL,
-                    default=options.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
-                ): bool,
-                vol.Optional(
-                    CONF_TIMEOUT,
-                    default=options.get(CONF_TIMEOUT, DEFAULT_TIMEOUT_SECONDS),
-                ): int,
-                vol.Optional(
-                    CONF_ENDPOINT_URL,
-                    default=options.get(
-                        CONF_ENDPOINT_URL,
-                        data.get(CONF_ENDPOINT_URL, ""),
-                    ),
-                ): str,
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema, errors=errors)
@@ -89,9 +75,8 @@ class StaykeyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        # New installs are gateway-only: the legacy webhook URL is deprecated
-        # and no longer offered here. Existing webhook-mode entries keep
-        # working and can still manage the URL through the options flow.
+        # Every entry connects through the Staykey gateway, so the token is
+        # required.
         errors: dict[str, str] = {}
 
         if user_input is not None:

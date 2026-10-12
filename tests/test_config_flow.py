@@ -7,6 +7,8 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+from homeassistant.config_entries import OptionsFlowWithReload
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "custom_components"))
 from staykey.config_flow import StaykeyOptionsFlowHandler  # noqa: E402
 
@@ -42,3 +44,22 @@ def test_saving_the_form_stores_the_choice():
     result = asyncio.run(flow.async_step_init(user_input))
 
     assert result["data"] == user_input
+
+
+def test_saving_options_reloads_the_entry():
+    assert issubclass(StaykeyOptionsFlowHandler, OptionsFlowWithReload)
+
+
+def test_options_offer_only_the_gateway_settings():
+    form = _options_form(
+        data={
+            "gateway_token": "token-abc",
+            "endpoint_url": "https://example.invalid/hook",
+        }
+    )
+
+    assert set(_defaults(form)) == {
+        "gateway_token",
+        "gateway_url",
+        "allow_support_actions",
+    }

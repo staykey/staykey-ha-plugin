@@ -24,3 +24,20 @@ def test_support_actions_option_is_labelled_and_explained():
         "this integration refuses troubleshooting commands"
         in init["data_description"]["allow_support_actions"]
     )
+
+
+def test_setup_failure_reason_is_explained():
+    message = _load("strings.json")["exceptions"]["gateway_token_required"]["message"]
+
+    assert "gateway token" in message
+
+
+def test_no_webhook_strings_remain():
+    strings = _load("strings.json")
+
+    assert "issues" not in strings
+    assert set(strings["options"]["step"]["init"]["data"]) == {
+        "gateway_token",
+        "gateway_url",
+        "allow_support_actions",
+    }

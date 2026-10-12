@@ -16,7 +16,6 @@ Learn more at [getstaykey.com](https://getstaykey.com).
 - **Automatic device discovery** — Staykey discovers supported devices (locks, climate, covers, switches, lights, sensors) from your Home Assistant instance
 - **Z-Wave lock support** — keypad code management, lock/unlock, and activity event forwarding
 - **State streaming** — device state changes are forwarded to Staykey in real time
-- **Legacy webhook mode (retired)** — one-way event forwarding via HTTP POST. Staykey has retired the webhook endpoint, so events sent this way no longer reach Staykey; webhook-mode installs must switch to a gateway token. New installs are gateway-only.
 - **Offline buffering** — events are queued when the connection is temporarily unavailable and sent on reconnect
 
 ## Requirements
@@ -48,9 +47,6 @@ Available options:
 - **Gateway Token** — your Staykey-provided authentication token
 - **Gateway URL** — WebSocket endpoint (uses the default unless directed otherwise by Staykey)
 - **Allow support actions** — off by default. While it is off, this integration refuses troubleshooting commands: calling any service, reading the codes stored on your locks, and watching the event bus. Staykey doesn't need them to run your properties, so leave it off.
-- **Forward all notifications** — send all Z-Wave notifications, not just lock events
-- **Legacy Webhook URL (deprecated)** — HTTP endpoint for one-way event forwarding; shown only for existing webhook-mode installs migrating to a gateway token
-- **SSL verification** and **timeout** settings for the legacy webhook
 
 ## Supported Devices
 
@@ -71,7 +67,7 @@ When configured with a gateway token, the integration maintains a persistent con
 - Device state changes are streamed to Staykey in real time
 - Lock activity events (keypad codes, manual operations) are forwarded automatically
 
-If a legacy webhook URL is still configured, the integration only attempts webhook sends when the gateway connection is unavailable — but Staykey has retired the webhook endpoint, so those sends fail and the URL can be removed. Integrations running in webhook-only mode raise a Repairs issue in Home Assistant with migration steps ([migration guide](https://getstaykey.com/help/installing-staykey-hacs-plugin)).
+The integration connects only through the gateway; webhook mode has been removed. An entry set up for webhook mode, with no gateway token, fails to set up and says why on its entry in **Settings > Devices & Services**. Copy the gateway token from your Staykey dashboard (Properties > Integrations > Home Assistant), add it under **Configure**, and the integration reloads and connects ([setup guide](https://getstaykey.com/help/installing-staykey-hacs-plugin)).
 
 ## Security & Privacy
 

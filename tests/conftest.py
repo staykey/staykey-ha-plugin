@@ -80,6 +80,13 @@ class _HomeAssistantError(Exception):
 sys.modules["homeassistant.exceptions"].HomeAssistantError = _HomeAssistantError
 
 
+class _ConfigEntryError(_HomeAssistantError):
+    """Stand-in for ``homeassistant.exceptions.ConfigEntryError``."""
+
+
+sys.modules["homeassistant.exceptions"].ConfigEntryError = _ConfigEntryError
+
+
 def _async_get(_):  # noqa: D401 - stub function
     """Stand-in for the HA registry async_get accessors."""
     raise RuntimeError("homeassistant.helpers.*_registry.async_get is stubbed in tests")
@@ -153,9 +160,16 @@ class _ConfigFlow(_FlowHandler):  # noqa: D401 - stub class
         super().__init_subclass__(**kwargs)
 
 
+class _OptionsFlowWithReload(_OptionsFlow):  # noqa: D401 - stub class
+    """Stand-in for ``homeassistant.config_entries.OptionsFlowWithReload``."""
+
+    automatic_reload = True
+
+
 _config_entries = sys.modules["homeassistant.config_entries"]
 _config_entries.OptionsFlow = _OptionsFlow
 _config_entries.ConfigFlow = _ConfigFlow
+_config_entries.OptionsFlowWithReload = _OptionsFlowWithReload
 sys.modules["homeassistant.data_entry_flow"].FlowResult = dict
 
 
@@ -195,8 +209,8 @@ async def _async_get_integration(_hass, _domain):  # noqa: D401 - stub function
 sys.modules["homeassistant.loader"].async_get_integration = _async_get_integration
 
 
-# Only the exception type the webhook path catches is needed; leave a real
-# aiohttp alone if the environment happens to have one installed.
+# The gateway client imports aiohttp and catches its ClientError; only that
+# type is needed. Leave a real aiohttp alone if one is installed.
 try:
     import aiohttp  # noqa: E402, F401
 except ImportError:
