@@ -1,3 +1,10 @@
+## [2.0.1](https://github.com/staykey/staykey-ha-plugin/compare/v2.0.0...v2.0.1) (2026-10-12)
+
+
+### Bug Fixes
+
+* **staykey:** tell a silent Z-Wave lock apart from a code mismatch ([#16](https://github.com/staykey/staykey-ha-plugin/issues/16)) ([af34339](https://github.com/staykey/staykey-ha-plugin/commit/af343399d81ebead39cb18fecda67c99423dab73))
+
 ## [2.0.0](https://github.com/staykey/staykey-ha-plugin/compare/v1.8.1...v2.0.0) (2026-10-12)
 
 
