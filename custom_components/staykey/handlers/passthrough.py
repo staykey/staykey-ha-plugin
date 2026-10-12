@@ -13,8 +13,9 @@ primitive.
 
 ## Security model
 
+* Staykey support sends it through the gateway to debug a Home Assistant.
 * Off unless the Home Assistant owner turns on the entry's "Allow support
-  actions" option (``SUPPORT_ACTIONS`` in :mod:`..services.ha_bridge`).
+  access" option (``SUPPORT_ACTIONS`` in :mod:`..services.ha_bridge`).
 * Only available to callers that have already authenticated to the
   Staykey gateway (same trust boundary as the rest of the gateway
   protocol).

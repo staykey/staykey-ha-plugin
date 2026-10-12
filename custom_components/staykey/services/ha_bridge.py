@@ -6,10 +6,12 @@ Access-code commands (``set_lock_access_code`` / ``clear_lock_access_code``
 in turn dispatches to the protocol-specific
 :class:`LockProvider <.lock_provider.LockProvider>`.
 
-Support actions (:data:`SUPPORT_ACTIONS`) are refused unless the entry's
-``allow_support_actions`` option is on. The check runs in the dispatcher
-itself, which ``batch`` re-enters for each of its commands, so a batch cannot
-carry a support action past it.
+Staykey support sends support actions (:data:`SUPPORT_ACTIONS`) through the
+gateway to debug a Home Assistant. They are refused unless the Home Assistant
+owner turned on the entry's "Allow support access" option
+(``allow_support_actions``). The check runs in the dispatcher itself, which
+``batch`` re-enters for each of its commands, so a batch cannot carry a
+support action past it.
 """
 
 from __future__ import annotations
@@ -63,10 +65,11 @@ _ACTION_MAP = {
 
 _PROGRESS_ACTIONS = {"lock", "unlock", "open_cover", "close_cover"}
 
-# Support and troubleshooting actions. They call any Home Assistant service,
+# Support and troubleshooting actions. Staykey support sends them through the
+# gateway to debug a Home Assistant. They call any Home Assistant service,
 # watch the event bus, read the codes stored on a lock, run discover_devices,
 # or run a batch of other commands, so the dispatcher refuses each one unless
-# the Home Assistant owner turns on "Allow support actions" for the entry. The
+# the Home Assistant owner turns on "Allow support access" for the entry. The
 # legacy set_access_code / clear_access_code aliases are here too, because
 # Staykey sends the *_lock_access_code names. Listing entities is not gated:
 # list_entities, get_state and get_diagnostics stay available whatever the

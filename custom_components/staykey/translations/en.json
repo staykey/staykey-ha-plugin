@@ -38,10 +38,10 @@
         "data": {
           "gateway_token": "Gateway Token",
           "gateway_url": "Gateway URL",
-          "allow_support_actions": "Allow support actions"
+          "allow_support_actions": "Allow support access"
         },
         "data_description": {
-          "allow_support_actions": "Off by default. While it is off, this integration refuses troubleshooting commands: calling any service, reading the codes stored on your locks, and watching the event bus. Staykey doesn't need them to run your properties."
+          "allow_support_actions": "Lets Staykey support run debugging commands on this Home Assistant, such as reading your lock codes. Leave it off unless support asks."
         }
       }
     },

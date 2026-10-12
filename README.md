@@ -48,7 +48,7 @@ Available options:
 
 - **Gateway Token** — your Staykey-provided authentication token
 - **Gateway URL** — WebSocket endpoint (uses the default unless directed otherwise by Staykey)
-- **Allow support actions** — off by default. While it is off, this integration refuses troubleshooting commands: calling any service, reading the codes stored on your locks, and watching the event bus. Staykey doesn't need them to run your properties, so leave it off.
+- **Allow support access** — off by default. Turn it on to let Staykey support debug this Home Assistant: call any service, read the codes stored on your locks, and watch its events. Leave it off unless Staykey support asks you to turn it on, and turn it off again afterwards.
 
 ## Supported Devices
 
@@ -76,7 +76,7 @@ The integration connects only through the gateway; webhook mode has been removed
 - Communication uses an authenticated WebSocket over TLS
 - Only device state and event data needed by Staykey is transmitted
 - Staykey can only control the devices it has set up on this entry: each device command names a Staykey device, and the integration looks up that device's entity itself
-- Troubleshooting commands (any service call, reading the codes stored on your locks, watching the event bus) are refused unless you turn on **Allow support actions**
+- Staykey support can run debugging commands (any service call, reading the codes stored on your locks, watching events) only while you have **Allow support access** turned on
 - No passwords, personal data, or network details are shared
 - The gateway token uniquely identifies your Home Assistant instance to your Staykey account
 - Each connection also sends your Home Assistant installation ID, a random identifier Home Assistant keeps for this installation. Every Staykey entry on the same Home Assistant sends the same ID, which lets Staykey recognise a lock shared by two properties as one lock

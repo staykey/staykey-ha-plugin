@@ -19,11 +19,10 @@ def test_english_translation_matches_strings():
 def test_support_actions_option_is_labelled_and_explained():
     init = _load("strings.json")["options"]["step"]["init"]
 
-    assert init["data"]["allow_support_actions"] == "Allow support actions"
-    assert (
-        "this integration refuses troubleshooting commands"
-        in init["data_description"]["allow_support_actions"]
-    )
+    assert init["data"]["allow_support_actions"] == "Allow support access"
+    description = init["data_description"]["allow_support_actions"]
+    assert "Lets Staykey support run debugging commands" in description
+    assert "Leave it off unless support asks." in description
 
 
 def test_setup_failure_reason_is_explained():

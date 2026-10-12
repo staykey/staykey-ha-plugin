@@ -17,8 +17,9 @@ cannot leave listeners attached indefinitely.
 
 ## Security model
 
-Same as :mod:`..passthrough`: off unless the Home Assistant owner turns on
-the entry's "Allow support actions" option, reachable only over the
+Same as :mod:`..passthrough`: Staykey support sends it through the gateway to
+debug a Home Assistant, and it is off unless the Home Assistant owner turns on
+the entry's "Allow support access" option. It is reachable only over the
 authenticated gateway channel, and bounded by the privileges Home Assistant
 grants the integration.
 """
