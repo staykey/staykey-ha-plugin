@@ -22,7 +22,8 @@
       "gateway_token_required": "A gateway token is required. Copy it from your Staykey dashboard under Properties > Integrations > Home Assistant.",
       "invalid_auth": "Staykey didn't accept this gateway token. Copy it again from your Staykey dashboard (Properties > Integrations > Home Assistant).",
       "cannot_connect": "Couldn't reach the Staykey gateway. Check your internet connection and the gateway URL, then try again.",
-      "token_in_use": "Another Staykey entry on this Home Assistant already uses this gateway token."
+      "token_in_use": "Another Staykey entry on this Home Assistant already uses this gateway token.",
+      "integration_disabled": "This integration is turned off in your Staykey dashboard. Turn it on there, then try again."
     },
     "abort": {
       "already_configured": "This integration is already configured.",

@@ -1,9 +1,10 @@
 """The setup, re-authentication and options forms.
 
 The setup and re-authentication forms check a new gateway token with Staykey
-before saving it. No form ever checks a token that another Staykey entry on
-this Home Assistant uses: the gateway hands a token's connection to the
-newest one, so a check would cut the running entry off.
+before saving it. No form ever checks a token that a Staykey entry on this
+Home Assistant uses: the gateway hands a token's connection to the newest
+one, so a check would cut the running entry off. That includes the entry
+being re-authenticated, which keeps retrying its token.
 """
 
 from __future__ import annotations
@@ -283,6 +284,95 @@ def test_options_with_the_same_token_leave_the_unique_id_alone(probe, data, opti
     assert recorder.calls == []
 
 
+def test_options_store_the_token_without_surrounding_spaces(probe):
+    probe()
+    entry = _entry(
+        "entry-1", data={"gateway_token": "token-abc"}, unique_id="token-abc"
+    )
+    flow = _options_flow(entry)
+    submitted = {
+        "gateway_token": " token-new\n",
+        "gateway_url": GATEWAY_URL,
+        "allow_support_actions": True,
+    }
+
+    result = _run(flow.async_step_init(submitted))
+
+    assert result["type"] == "create_entry"
+    assert result["data"] == {
+        "gateway_token": "token-new",
+        "gateway_url": GATEWAY_URL,
+        "allow_support_actions": True,
+    }
+    assert flow.hass.config_entries.updates == [("entry-1", {"unique_id": "token-new"})]
+
+
+# Which tokens count as in use
+
+
+@pytest.mark.parametrize(
+    ("other", "token", "in_use"),
+    [
+        pytest.param(
+            _entry("entry-2", data={"gateway_token": "token-other"}),
+            "token-other",
+            True,
+            id="its-setup-token",
+        ),
+        pytest.param(
+            _entry(
+                "entry-2",
+                data={"gateway_token": "token-first"},
+                options={"gateway_token": " token-other "},
+                unique_id="token-first",
+            ),
+            "token-other",
+            True,
+            id="its-options-token",
+        ),
+        pytest.param(
+            _entry(
+                "entry-2",
+                data={"gateway_token": "token-stale"},
+                options={"gateway_token": "token-other"},
+                unique_id="token-other",
+            ),
+            "token-stale",
+            False,
+            id="a-setup-token-its-options-replaced",
+        ),
+        pytest.param(
+            _entry(
+                "entry-2",
+                data={"endpoint_url": WEBHOOK_URL},
+                options={"gateway_token": "token-other"},
+                unique_id="token-first",
+            ),
+            "token-first",
+            True,
+            id="its-unique-id",
+        ),
+    ],
+)
+def test_a_token_is_in_use_when_another_entry_runs_on_it_or_is_known_by_it(
+    other, token, in_use
+):
+    hass = _hass(_entry("entry-1", data={"gateway_token": "token-abc"}), other)
+
+    assert config_flow._token_in_use_elsewhere(hass, token, "entry-1") is in_use
+
+
+def test_the_entry_itself_does_not_count_as_using_its_token():
+    entry = _entry(
+        "entry-1", data={"gateway_token": "token-abc"}, unique_id="token-abc"
+    )
+
+    assert (
+        config_flow._token_in_use_elsewhere(_hass(entry), "token-abc", "entry-1")
+        is False
+    )
+
+
 # Setup
 
 
@@ -293,7 +383,9 @@ def _setup_flow(hass):
     return flow
 
 
-@pytest.mark.parametrize("outcome", ["invalid_auth", "cannot_connect"])
+@pytest.mark.parametrize(
+    "outcome", ["invalid_auth", "cannot_connect", "integration_disabled"]
+)
 def test_setup_refuses_a_token_the_gateway_does_not_accept(probe, outcome):
     recorder = probe(outcome)
     submitted = {"gateway_token": " token-typo ", "gateway_url": GATEWAY_URL}
@@ -432,7 +524,9 @@ def test_reauth_refuses_a_token_another_entry_uses_without_checking_it(probe, ot
     assert recorder.calls == []
 
 
-@pytest.mark.parametrize("outcome", ["invalid_auth", "cannot_connect"])
+@pytest.mark.parametrize(
+    "outcome", ["invalid_auth", "cannot_connect", "integration_disabled"]
+)
 def test_reauth_refuses_a_token_the_gateway_does_not_accept(probe, outcome):
     recorder = probe(outcome)
     entry = _entry(
@@ -448,9 +542,80 @@ def test_reauth_refuses_a_token_the_gateway_does_not_accept(probe, outcome):
     )
 
     assert result["type"] == "form"
+    assert result["step_id"] == "reauth_confirm"
     assert result["errors"] == {"base": outcome}
+    # What was typed stays in the form, to correct.
+    assert _suggested(result, "gateway_token") == " token-new "
     # The entry's gateway URL: its options first, then its setup data.
     assert recorder.calls == [(GATEWAY_URL, "token-new")]
+
+
+def test_reauth_keeps_a_token_another_entry_uses_in_the_form(probe):
+    probe("ok")
+    entry = _entry("entry-1", data={"gateway_token": "token-old"})
+    other = _entry("entry-2", data={"gateway_token": "token-other"})
+
+    result = _run(
+        _reauth_flow(_hass(entry, other)).async_step_reauth_confirm(
+            {"gateway_token": "token-other"}
+        )
+    )
+
+    assert result["errors"] == {"base": "token_in_use"}
+    assert _suggested(result, "gateway_token") == "token-other"
+
+
+@pytest.mark.parametrize(
+    ("data", "options", "typed"),
+    [
+        pytest.param({"gateway_token": "token-old"}, {}, " token-old ", id="setup"),
+        pytest.param(
+            {"gateway_token": "token-first"},
+            {"gateway_token": "token-old", "allow_support_actions": True},
+            "token-old",
+            id="options",
+        ),
+    ],
+)
+def test_reauth_with_the_token_in_use_reloads_without_checking_it(
+    probe, data, options, typed
+):
+    """The entry keeps retrying its token, so checking that token alongside
+    would take its connection over; a reload tries it again instead."""
+    recorder = probe("ok")
+    entry = _entry("entry-1", data=data, options=options, unique_id="token-first")
+
+    result = _run(
+        _reauth_flow(_hass(entry)).async_step_reauth_confirm({"gateway_token": typed})
+    )
+
+    assert recorder.calls == []
+    assert result["type"] == "abort"
+    assert result["entry"] is entry
+    # Nothing changes; Home Assistant reloads the entry all the same.
+    assert result["changes"] == {}
+    assert result["reason"] == "reauth_successful"
+
+
+def test_reauth_checks_a_setup_token_that_the_options_replaced(probe):
+    """The entry runs on its options token, so its old setup token is a
+    different token, checked like any other."""
+    recorder = probe("ok")
+    entry = _entry(
+        "entry-1",
+        data={"gateway_token": "token-first"},
+        options={"gateway_token": "token-old"},
+        unique_id="token-old",
+    )
+
+    result = _run(
+        _reauth_flow(_hass(entry)).async_step_reauth_confirm(
+            {"gateway_token": "token-first"}
+        )
+    )
+
+    assert recorder.calls == [(DEFAULT_GATEWAY_URL, "token-first")]
+    assert result["changes"]["unique_id"] == "token-first"
 
 
 def test_reauth_saves_the_accepted_token_and_reloads(probe):
@@ -501,3 +666,26 @@ def test_reauth_replaces_a_token_saved_in_the_options(probe):
     }
     # No gateway URL saved: the default one.
     assert recorder.calls == [(DEFAULT_GATEWAY_URL, "token-new")]
+
+
+# The Home Assistant stand-ins these tests run on (checked against Home
+# Assistant 2026.4's ``config_entries.py``)
+
+
+def test_stand_in_defaults_only_a_left_out_abort_reason():
+    flow = _reauth_flow(_hass(_entry("entry-1")))
+    entry = _entry("entry-1")
+
+    assert flow.async_update_reload_and_abort(entry)["reason"] == "reauth_successful"
+    assert flow.async_update_reload_and_abort(entry, reason=None)["reason"] is None
+
+
+def test_stand_in_clears_the_unique_id_and_returns_early_for_none():
+    existing = _entry("entry-1", unique_id="token-abc")
+    # An entry with no unique ID, which a lookup by None would find.
+    flow = _setup_flow(_hass(existing, _entry("entry-2")))
+
+    assert _run(flow.async_set_unique_id("token-abc")) is existing
+    assert flow.unique_id == "token-abc"
+    assert _run(flow.async_set_unique_id(None)) is None
+    assert flow.unique_id is None

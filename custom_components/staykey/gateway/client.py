@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import aiohttp
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntry
 from homeassistant.const import __version__ as HA_VERSION
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
@@ -28,17 +28,19 @@ MAX_BACKOFF_S = 300
 HEARTBEAT_S = 25
 AUTH_TIMEOUT_S = 10
 
-# How a token check ends: the gateway accepted the token, rejected it, or
-# could not be asked (no connection, no answer, or a refusal that is not
-# about the token). The last two double as the forms' error keys.
+# How a token check ends: the gateway accepted the token, rejected it, found
+# the integration turned off, or could not be asked (no connection, no answer,
+# or any other refusal). All but the first double as the forms' error keys.
 AUTH_OK = "ok"
 AUTH_INVALID = "invalid_auth"
+AUTH_INTEGRATION_DISABLED = "integration_disabled"
 AUTH_CANNOT_CONNECT = "cannot_connect"
 
 # The gateway closes the connection with this code (policy violation) when it
 # refuses a token, giving the reason as an ``auth_failed`` message.
 _REFUSED_CLOSE_CODE = 1008
 _INVALID_TOKEN_MESSAGE = "Invalid token"
+_INTEGRATION_DISABLED_MESSAGE = "Integration is disabled"
 
 
 @dataclass(frozen=True)
@@ -62,12 +64,14 @@ def _decode_object(text: Any) -> dict[str, Any] | None:
 def _refusal(message: str) -> _AuthResult:
     """Classify an ``auth_failed`` refusal by its message.
 
-    Only "Invalid token" is about the token. Anything else (a disabled
-    integration, the gateway's own auth timeout) can clear up without a new
-    token, so it is retried.
+    Only "Invalid token" is about the token. A turned-off integration is told
+    apart so the forms can say so. Anything else (the gateway's own auth
+    timeout, or the gateway unable to check tokens) can clear up by itself.
     """
     if message == _INVALID_TOKEN_MESSAGE:
         return _AuthResult(AUTH_INVALID, message)
+    if message == _INTEGRATION_DISABLED_MESSAGE:
+        return _AuthResult(AUTH_INTEGRATION_DISABLED, message)
     return _AuthResult(AUTH_CANNOT_CONNECT, message)
 
 
@@ -128,11 +132,11 @@ async def _authenticate(ws: aiohttp.ClientWebSocketResponse, token: str) -> _Aut
 async def probe_token(hass: HomeAssistant, gateway_url: str, token: str) -> str:
     """Check ``token`` with the gateway once, then hang up.
 
-    Returns ``AUTH_OK``, ``AUTH_INVALID`` or ``AUTH_CANNOT_CONNECT``, and never
-    raises. The check sends only the token, never the capabilities, so it
-    sets nothing up. The gateway gives a token's connection to the newest one,
-    so never check a token a running entry uses: closing the check would cut
-    that entry off.
+    Returns ``AUTH_OK``, ``AUTH_INVALID``, ``AUTH_INTEGRATION_DISABLED`` or
+    ``AUTH_CANNOT_CONNECT``, and never raises. The check sends only the
+    token, never the capabilities, so it sets nothing up. The gateway gives a
+    token's connection to the newest one, so never check a token a running
+    entry uses: closing the check would cut that entry off.
     """
     ws: aiohttp.ClientWebSocketResponse | None = None
     try:
@@ -188,6 +192,9 @@ class GatewayClient:
         self._running = False
         # How the latest connection attempt's token check ended.
         self._auth_outcome: str | None = None
+        # Set from the first rejection of the token until it is accepted
+        # again: the re-authentication prompt is asked for once per run.
+        self._token_rejected = False
         self._reconnect_task: asyncio.Task | None = None
         self._listen_task: asyncio.Task | None = None
         self._event_queue = EventQueue()
@@ -262,14 +269,16 @@ class GatewayClient:
                 connected = await self._connect_and_auth()
                 if connected:
                     backoff = INITIAL_BACKOFF_S
+                    self._token_accepted()
                     if self._event_queue.size > 0:
                         await self._event_queue.drain(self.send)
                     await self._listen()
                     LOGGER.info("Gateway listen loop ended, will reconnect")
                 elif self._auth_outcome == AUTH_INVALID:
-                    # Retrying can't help: stop for good, and let the owner
-                    # paste a new token.
-                    self._stop_for_rejected_token()
+                    # Ask the owner for a new token, but keep retrying this
+                    # one: a gateway that can't check tokens may say they're
+                    # invalid too.
+                    self._token_refused()
                 else:
                     LOGGER.warning(
                         "Gateway connection/auth failed, retrying in %ds", backoff
@@ -295,15 +304,30 @@ class GatewayClient:
 
         LOGGER.info("Gateway connection loop stopped (running=%s)", self._running)
 
-    def _stop_for_rejected_token(self) -> None:
-        """Stop reconnecting and ask Home Assistant for a new token."""
-        # Cleared first, so the loop's done callback doesn't restart it.
-        self._running = False
+    def _token_refused(self) -> None:
+        """Ask Home Assistant for a new token, once per run of rejections."""
+        if self._token_rejected:
+            return
+        self._token_rejected = True
         LOGGER.warning(
-            "Staykey rejected the gateway token; Home Assistant will ask for a new one"
+            "Staykey rejected the gateway token; Home Assistant will ask for a"
+            " new one, and the connection keeps retrying meanwhile"
         )
         if self._config_entry is not None:
             self._config_entry.async_start_reauth(self._hass)
+
+    def _token_accepted(self) -> None:
+        """After a run of rejections, close the prompt for a new token."""
+        if not self._token_rejected:
+            return
+        self._token_rejected = False
+        LOGGER.info("Staykey accepted the gateway token again")
+        if self._config_entry is None:
+            return
+        for flow in list(
+            self._config_entry.async_get_active_flows(self._hass, {SOURCE_REAUTH})
+        ):
+            self._hass.config_entries.flow.async_abort(flow["flow_id"])
 
     async def _connect_and_auth(self) -> bool:
         """Connect and authenticate; True once the gateway accepts the token.
@@ -330,8 +354,9 @@ class GatewayClient:
         self._auth_outcome = result.outcome
 
         if result.outcome != AUTH_OK:
-            # A rejected token is reported once, by the connection loop.
-            if result.outcome == AUTH_CANNOT_CONNECT:
+            # A rejected token is reported once per run, by the connection
+            # loop.
+            if result.outcome != AUTH_INVALID:
                 LOGGER.error("Gateway auth failed: %s", result.message)
             await self._close_ws()
             return False

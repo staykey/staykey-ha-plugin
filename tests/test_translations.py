@@ -70,3 +70,19 @@ def test_options_word_a_token_in_use_like_setup():
         strings["options"]["error"]["token_in_use"]
         == strings["config"]["error"]["token_in_use"]
     )
+
+
+def test_a_disabled_integration_is_worded():
+    error = _load("strings.json")["config"]["error"]
+
+    assert error["integration_disabled"] == (
+        "This integration is turned off in your Staykey dashboard. "
+        "Turn it on there, then try again."
+    )
+    # The errors the forms already had stay.
+    assert {
+        "gateway_token_required",
+        "invalid_auth",
+        "cannot_connect",
+        "token_in_use",
+    } <= set(error)

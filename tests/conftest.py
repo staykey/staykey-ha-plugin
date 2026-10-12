@@ -202,18 +202,40 @@ _RELOAD_AND_ABORT_FIELDS = frozenset(
     }
 )
 
+# Home Assistant's ``UNDEFINED``: an argument that was left out, as opposed to
+# one passed as None.
+_UNDEFINED = object()
+
 
 class _ConfigFlow(_FlowHandler):  # noqa: D401 - stub class
     """Stand-in for ``homeassistant.config_entries.ConfigFlow``."""
-
-    unique_id = None
 
     def __init_subclass__(cls, domain=None, **kwargs):
         super().__init_subclass__(**kwargs)
         cls.handler = domain
 
+    @property
+    def unique_id(self):
+        if not getattr(self, "context", None):
+            return None
+        return self.context.get("unique_id")
+
     async def async_set_unique_id(self, unique_id=None, *, raise_on_progress=True):
-        self.unique_id = unique_id
+        """Like Home Assistant's: None clears the flow's unique ID and returns
+        straight away; any other ID is kept and the entry that already has it,
+        if any, is returned."""
+        if unique_id is None:
+            self.context["unique_id"] = None
+            return None
+        self.context["unique_id"] = unique_id
+        return next(
+            (
+                entry
+                for entry in self.hass.config_entries.async_entries(self.handler)
+                if entry.unique_id == unique_id
+            ),
+            None,
+        )
 
     def _abort_if_unique_id_configured(
         self, updates=None, reload_on_update=True, *, error="already_configured"
@@ -225,14 +247,21 @@ class _ConfigFlow(_FlowHandler):  # noqa: D401 - stub class
     def _get_reauth_entry(self):
         return self.hass.config_entries.async_get_known_entry(self.context["entry_id"])
 
-    def async_update_reload_and_abort(self, entry, *, reason=None, **changes):
+    def async_update_reload_and_abort(self, entry, *, reason=_UNDEFINED, **changes):
         """Return the abort, with the entry and the changes asked for, so a
-        test can check them; Home Assistant applies them and reloads."""
+        test can check them; Home Assistant applies them and reloads.
+
+        As in Home Assistant, only a reason that is left out defaults.
+        """
         if unknown := set(changes) - _RELOAD_AND_ABORT_FIELDS:
             raise TypeError(f"unexpected arguments: {sorted(unknown)}")
+        if reason is _UNDEFINED:
+            reason = "reauth_successful"
+            if self.context.get("source") == "reconfigure":
+                reason = "reconfigure_successful"
         return {
             "type": "abort",
-            "reason": reason or "reauth_successful",
+            "reason": reason,
             "entry": entry,
             "changes": changes,
         }
@@ -245,6 +274,7 @@ class _OptionsFlowWithReload(_OptionsFlow):  # noqa: D401 - stub class
 
 
 _config_entries = sys.modules["homeassistant.config_entries"]
+_config_entries.SOURCE_REAUTH = "reauth"
 _config_entries.OptionsFlow = _OptionsFlow
 _config_entries.ConfigFlow = _ConfigFlow
 _config_entries.OptionsFlowWithReload = _OptionsFlowWithReload

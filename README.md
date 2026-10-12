@@ -38,7 +38,7 @@ Learn more at [getstaykey.com](https://getstaykey.com).
 
 ## Configuration
 
-During setup you provide your Staykey gateway token, and Staykey checks it before the integration is added. If the token later stops working, Home Assistant shows a re-authentication prompt for the entry: paste the current token from your Staykey dashboard (Properties > Integrations > Home Assistant) there.
+During setup you provide your Staykey gateway token, and Staykey checks it when you add the integration. If Staykey later stops accepting a running entry's token, Home Assistant asks for a new one with a re-authentication prompt for the entry: paste the current token from your Staykey dashboard (Properties > Integrations > Home Assistant) there. The integration keeps trying to connect in the meantime, and the prompt clears itself if the token starts working again.
 
 After setup, you can adjust options from:
 

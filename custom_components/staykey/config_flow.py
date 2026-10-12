@@ -21,21 +21,31 @@ from .const import (
 from .gateway.client import AUTH_OK, probe_token
 
 
+def _current_token(entry: config_entries.ConfigEntry) -> str:
+    """The token ``entry`` connects with: its options token, if set, over the
+    one it was set up with."""
+    return (
+        entry.options.get(CONF_GATEWAY_TOKEN)
+        or entry.data.get(CONF_GATEWAY_TOKEN)
+        or ""
+    ).strip()
+
+
 def _token_in_use_elsewhere(
     hass: HomeAssistant, token: str, entry_id: str | None = None
 ) -> bool:
-    """Whether a Staykey entry other than ``entry_id`` has ``token``.
+    """Whether a Staykey entry other than ``entry_id`` uses ``token``.
 
     Checking such a token with the gateway would cut that entry off: the
     gateway gives a token's connection to the newest one, and the check
-    closes it straight away.
+    closes it straight away. A token that is another entry's unique ID counts
+    too, since saving it would give two entries the same unique ID.
     """
     for entry in hass.config_entries.async_entries(DOMAIN):
         if entry.entry_id == entry_id:
             continue
-        for saved in (entry.options, entry.data):
-            if (saved.get(CONF_GATEWAY_TOKEN) or "").strip() == token:
-                return True
+        if token in (_current_token(entry), entry.unique_id):
+            return True
     return False
 
 
@@ -64,16 +74,13 @@ class StaykeyOptionsFlowHandler(config_entries.OptionsFlowWithReload):
             ):
                 errors["base"] = "token_in_use"
             else:
-                current_token = (
-                    options.get(CONF_GATEWAY_TOKEN)
-                    or data.get(CONF_GATEWAY_TOKEN)
-                    or ""
-                ).strip()
-                if new_token and new_token != current_token:
+                if new_token and new_token != _current_token(self.config_entry):
                     # The entry's unique ID follows the token it uses.
                     self.hass.config_entries.async_update_entry(
                         self.config_entry, unique_id=new_token
                     )
+                if new_token:
+                    user_input = {**user_input, CONF_GATEWAY_TOKEN: new_token}
                 return self.async_create_entry(title="", data=user_input)
 
         schema = vol.Schema(
@@ -180,11 +187,16 @@ class StaykeyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             if not gateway_token:
                 errors["base"] = "gateway_token_required"
+            elif gateway_token == _current_token(entry):
+                # This entry is still retrying that token, so checking it as
+                # well would take the entry's connection over. Reload the
+                # entry to try it again instead.
+                return self.async_update_reload_and_abort(entry)
             elif _token_in_use_elsewhere(self.hass, gateway_token, entry.entry_id):
                 errors["base"] = "token_in_use"
             else:
-                # This entry's connection stopped when its token was
-                # rejected, so checking the new token takes nothing over.
+                # A different token from the one this entry is retrying, so
+                # checking it takes no connection over.
                 gateway_url = (
                     entry.options.get(CONF_GATEWAY_URL)
                     or entry.data.get(CONF_GATEWAY_URL)
@@ -207,8 +219,10 @@ class StaykeyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     )
                 errors["base"] = outcome
 
+        data_schema = vol.Schema({vol.Required(CONF_GATEWAY_TOKEN): str})
+        if user_input is not None:
+            # Keep what was typed, to correct.
+            data_schema = self.add_suggested_values_to_schema(data_schema, user_input)
         return self.async_show_form(
-            step_id="reauth_confirm",
-            data_schema=vol.Schema({vol.Required(CONF_GATEWAY_TOKEN): str}),
-            errors=errors,
+            step_id="reauth_confirm", data_schema=data_schema, errors=errors
         )
