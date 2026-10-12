@@ -63,14 +63,14 @@ _ACTION_MAP = {
 
 _PROGRESS_ACTIONS = {"lock", "unlock", "open_cover", "close_cover"}
 
-# Support and troubleshooting actions. Each one reaches past the devices
-# Staykey gave this entry (any Home Assistant service, the whole event bus,
-# every entity), reads the codes stored on a lock, or runs other commands, so
-# none runs unless the Home Assistant owner turns on "Allow support actions"
-# for the entry. The legacy set_access_code / clear_access_code aliases are
-# here too, because Staykey sends the *_lock_access_code names. list_entities,
-# get_state and get_diagnostics stay available, because Staykey uses them day
-# to day.
+# Support and troubleshooting actions. They call any Home Assistant service,
+# watch the event bus, read the codes stored on a lock, run discover_devices,
+# or run a batch of other commands, so the dispatcher refuses each one unless
+# the Home Assistant owner turns on "Allow support actions" for the entry. The
+# legacy set_access_code / clear_access_code aliases are here too, because
+# Staykey sends the *_lock_access_code names. Listing entities is not gated:
+# list_entities, get_state and get_diagnostics stay available whatever the
+# option says, because Staykey uses them day to day.
 SUPPORT_ACTIONS: frozenset[str] = frozenset(
     {
         "batch",

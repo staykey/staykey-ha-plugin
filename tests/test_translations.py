@@ -20,4 +20,7 @@ def test_support_actions_option_is_labelled_and_explained():
     init = _load("strings.json")["options"]["step"]["init"]
 
     assert init["data"]["allow_support_actions"] == "Allow support actions"
-    assert "Staykey support" in init["data_description"]["allow_support_actions"]
+    assert (
+        "this integration refuses troubleshooting commands"
+        in init["data_description"]["allow_support_actions"]
+    )
