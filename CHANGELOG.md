@@ -1,3 +1,11 @@
+## [2.0.0-beta.4](https://github.com/staykey/staykey-ha-plugin/compare/v2.0.0-beta.3...v2.0.0-beta.4) (2026-10-12)
+
+
+### Bug Fixes
+
+* **staykey:** call the option Allow support access and say what it grants ([0dd747b](https://github.com/staykey/staykey-ha-plugin/commit/0dd747bfd6eb134c5d27b504bcdb128ac5bb4e89))
+* **staykey:** state what support access changes, cap event taps at 25 seconds, and log refusals without a traceback ([73de223](https://github.com/staykey/staykey-ha-plugin/commit/73de223f44bb78382d5cc6dcda9960c119388750))
+
 ## [2.0.0-beta.3](https://github.com/staykey/staykey-ha-plugin/compare/v2.0.0-beta.2...v2.0.0-beta.3) (2026-10-12)
 
 
