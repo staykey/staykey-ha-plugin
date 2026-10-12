@@ -74,12 +74,13 @@ The integration connects only through the gateway; webhook mode has been removed
 ## Security & Privacy
 
 - Communication uses an authenticated WebSocket over TLS
-- Only device state and event data needed by Staykey is transmitted
-- Staykey can only control the devices it has set up on this entry: each device command names a Staykey device, and the integration looks up that device's entity itself
-- Staykey support can run debugging commands (any service call, reading the codes stored on your locks, watching events) only while you have **Allow support access** turned on
-- No passwords, personal data, or network details are shared
 - The gateway token uniquely identifies your Home Assistant instance to your Staykey account
 - Each connection also sends your Home Assistant installation ID, a random identifier Home Assistant keeps for this installation. Every Staykey entry on the same Home Assistant sends the same ID, which lets Staykey recognise a lock shared by two properties as one lock
+- With **Allow support access** off (the default):
+  - only the device state and event data Staykey needs is transmitted
+  - Staykey can only control the devices it has set up on this entry: each device command names a Staykey device, and the integration looks up that device's entity itself
+  - no passwords, personal data, or network details are shared
+- With **Allow support access** on, Staykey support can also run debugging commands: call any service, read the codes stored on your locks, and watch events. Turn it on only while Staykey support is helping you, and off again afterwards
 
 ## Troubleshooting
 

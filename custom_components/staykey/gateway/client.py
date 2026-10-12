@@ -18,6 +18,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from ..const import GATEWAY_FEATURES
 from ..device_map import DeviceMap
+from ..services.ha_bridge import SupportActionDisabledError
 from . import protocol
 from .event_queue import EventQueue
 
@@ -461,7 +462,11 @@ class GatewayClient:
                 protocol.response_message(request_id, status="ok", data=result)
             )
         except Exception as exc:
-            LOGGER.exception("Command handler error for action=%s", action)
+            if isinstance(exc, SupportActionDisabledError):
+                # The owner's choice, not a fault: no traceback.
+                LOGGER.warning("Refused a support command: %s", exc)
+            else:
+                LOGGER.exception("Command handler error for action=%s", action)
             await self.send(
                 protocol.response_message(
                     request_id,

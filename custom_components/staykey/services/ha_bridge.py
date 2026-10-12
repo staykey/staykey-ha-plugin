@@ -93,8 +93,8 @@ class SupportActionDisabledError(PermissionError):
 
     def __init__(self, action: str) -> None:
         super().__init__(
-            f"Action {action!r} is a support action, and support actions are "
-            "turned off for this Staykey entry"
+            f"Action {action!r} needs Allow support access, which is off for "
+            "this Staykey entry"
         )
 
 

@@ -41,8 +41,17 @@ def test_coerce_duration_defaults_when_missing():
 def test_coerce_duration_clamps_above_max():
     from handlers.event_tap import _coerce_duration
 
-    # The max cap is 60s — anything larger should clamp, not reject.
-    assert _coerce_duration(600) == 60.0
+    # The max cap is 25s — anything larger should clamp, not reject.
+    assert _coerce_duration(600) == 25.0
+
+
+def test_coerce_duration_clamps_a_60_second_request_to_25():
+    from handlers.event_tap import _coerce_duration
+
+    # A request that sends nothing back for 30 seconds is treated as
+    # unanswered, so a tap must finish well inside that.
+    assert _coerce_duration(60) == 25.0
+    assert _coerce_duration(25) == 25.0
 
 
 def test_coerce_duration_rejects_non_positive():
@@ -288,6 +297,25 @@ def test_tap_events_truncates_at_max_events(monkeypatch):
     out = asyncio.run(_run())
     assert out["captured"] == 3
     assert out["truncated"] is True
+
+
+def test_tap_events_listens_for_at_most_25_seconds(monkeypatch):
+    from handlers import event_tap
+
+    bus = _FakeBus()
+    hass = SimpleNamespace(bus=bus)
+    slept: list[float] = []
+
+    async def _run():
+        async def _recording_sleep(seconds):
+            slept.append(seconds)
+
+        monkeypatch.setattr(asyncio, "sleep", _recording_sleep)
+        return await event_tap.handle_tap_events(hass, None, {"duration_seconds": 60})
+
+    out = asyncio.run(_run())
+    assert slept == [25.0]
+    assert out["duration_seconds"] == 25.0
 
 
 def test_tap_events_subscribes_to_wildcard_when_event_types_omitted(monkeypatch):

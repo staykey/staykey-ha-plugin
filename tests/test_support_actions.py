@@ -8,6 +8,8 @@ Staykey gave this entry, so the dispatcher refuses them unless the entry's
 from __future__ import annotations
 
 import asyncio
+import json
+import logging
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -22,6 +24,7 @@ from staykey.const import (  # noqa: E402
     DEFAULT_ALLOW_SUPPORT_ACTIONS,
 )
 from staykey.device_map import DeviceMap  # noqa: E402
+from staykey.gateway import client as gateway_client  # noqa: E402
 from staykey.handlers import batch  # noqa: E402
 from staykey.services import ha_bridge  # noqa: E402
 from staykey.services.ha_bridge import (  # noqa: E402
@@ -101,6 +104,13 @@ def test_support_action_is_refused_while_the_option_is_off(reached, action):
     assert reached == []
 
 
+def test_a_refusal_names_the_option_that_is_off():
+    assert str(SupportActionDisabledError("tap_events")) == (
+        "Action 'tap_events' needs Allow support access, "
+        "which is off for this Staykey entry"
+    )
+
+
 def test_the_dispatcher_refuses_support_actions_unless_told_otherwise(reached):
     with pytest.raises(SupportActionDisabledError):
         _run(_handler()("ha_service_call", "req-1", {}))
@@ -145,7 +155,10 @@ def test_a_batch_cannot_carry_a_support_action_past_the_option(reached):
     by_id = {r["id"]: r for r in result["results"]}
     assert by_id["a"]["status"] == "ok"
     assert by_id["b"]["status"] == "error"
-    assert "support action" in by_id["b"]["error"]["message"]
+    assert by_id["b"]["error"]["message"] == (
+        "Action 'ha_service_call' needs Allow support access, "
+        "which is off for this Staykey entry"
+    )
     assert reached == ["get_state"]
 
 
@@ -216,3 +229,85 @@ def test_setup_hands_the_entry_option_to_the_dispatcher(monkeypatch, options, ex
 
     assert _run(staykey.async_setup_entry(hass, _FakeEntry(options))) is True
     assert seen == {"allow_support_actions": expected}
+
+
+def _gateway_client(command_handler) -> gateway_client.GatewayClient:
+    return gateway_client.GatewayClient(
+        hass=SimpleNamespace(),
+        gateway_url="wss://gateway.example.invalid/ws",
+        gateway_token="token-abc",
+        agent_version="9.9.9",
+        device_map=_device_map(),
+        command_handler=command_handler,
+    )
+
+
+def _answer(monkeypatch, client, action: str) -> list[dict]:
+    """Hand ``client`` one request from the gateway and return its replies."""
+    sent: list[dict] = []
+
+    async def record(text: str) -> None:
+        sent.append(json.loads(text))
+
+    monkeypatch.setattr(client, "send", record)
+    _run(client._handle_request({"id": "req-1", "action": action, "params": {}}))
+    return sent
+
+
+def _client_log(caplog) -> list[logging.LogRecord]:
+    return [
+        r
+        for r in caplog.records
+        if r.name == gateway_client.LOGGER.name and r.levelno >= logging.WARNING
+    ]
+
+
+def test_a_refused_support_command_is_logged_as_a_warning_without_a_traceback(
+    monkeypatch, caplog, reached
+):
+    caplog.set_level(logging.DEBUG, logger=gateway_client.LOGGER.name)
+    client = _gateway_client(_handler(allow_support_actions=False))
+
+    sent = _answer(monkeypatch, client, "ha_service_call")
+
+    # The caller gets the same error reply as for any other failure.
+    assert sent == [
+        {
+            "type": "response",
+            "id": "req-1",
+            "status": "error",
+            "error": {
+                "code": "handler_error",
+                "message": (
+                    "Action 'ha_service_call' needs Allow support access, "
+                    "which is off for this Staykey entry"
+                ),
+            },
+        }
+    ]
+    logged = _client_log(caplog)
+    assert len(logged) == 1
+    assert logged[0].levelno == logging.WARNING
+    assert logged[0].exc_info is None
+    assert "needs Allow support access" in logged[0].getMessage()
+    assert reached == []
+
+
+def test_any_other_command_failure_is_still_logged_with_a_traceback(
+    monkeypatch, caplog
+):
+    caplog.set_level(logging.DEBUG, logger=gateway_client.LOGGER.name)
+
+    async def failing(*_args):
+        raise ValueError("Unknown action: nope")
+
+    sent = _answer(monkeypatch, _gateway_client(failing), "nope")
+
+    assert sent[0]["error"] == {
+        "code": "handler_error",
+        "message": "Unknown action: nope",
+    }
+    logged = _client_log(caplog)
+    assert len(logged) == 1
+    assert logged[0].levelno == logging.ERROR
+    assert logged[0].exc_info is not None

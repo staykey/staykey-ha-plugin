@@ -37,7 +37,10 @@ LOGGER = logging.getLogger(__name__)
 
 # Hard caps: protect HA from a misbehaving caller.  Tap windows are
 # meant for empirical debugging, not long-running subscriptions.
-_MAX_DURATION_SECONDS = 60.0
+# A tap sends nothing back until its window ends, and a request that sends
+# nothing back for 30 seconds is treated as unanswered, so the window stops
+# at 25 seconds.
+_MAX_DURATION_SECONDS = 25.0
 _DEFAULT_DURATION_SECONDS = 10.0
 _MAX_EVENTS = 500
 _DEFAULT_MAX_EVENTS = 200
@@ -55,7 +58,7 @@ async def handle_tap_events(
         {
           "event_types": ["state_changed", "matter_event"],  # optional
           "entity_id": "lock.front_door",                   # optional filter
-          "duration_seconds": 10,                              # default 10, max 60
+          "duration_seconds": 10,                              # default 10, max 25
           "max_events": 200                                     # default 200, max 500
         }
 
