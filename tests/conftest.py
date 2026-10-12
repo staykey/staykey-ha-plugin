@@ -121,6 +121,44 @@ sys.modules["homeassistant.core"].State = _State
 sys.modules["homeassistant.helpers.typing"].ConfigType = dict
 
 
+# ``config_flow.py`` subclasses Home Assistant's flow handlers and builds its
+# forms with voluptuous (installed from requirements-test.txt). These
+# stand-ins return plain dicts shaped like Home Assistant's flow results.
+_ensure_module("homeassistant.data_entry_flow")
+
+
+class _FlowHandler:  # noqa: D401 - stub class
+    """Stand-in for the data-entry flow result helpers."""
+
+    def async_show_form(self, *, step_id, data_schema=None, errors=None):
+        return {
+            "type": "form",
+            "step_id": step_id,
+            "data_schema": data_schema,
+            "errors": errors or {},
+        }
+
+    def async_create_entry(self, *, title, data):
+        return {"type": "create_entry", "title": title, "data": data}
+
+
+class _OptionsFlow(_FlowHandler):  # noqa: D401 - stub class
+    """Stand-in for ``homeassistant.config_entries.OptionsFlow``."""
+
+
+class _ConfigFlow(_FlowHandler):  # noqa: D401 - stub class
+    """Stand-in for ``homeassistant.config_entries.ConfigFlow``."""
+
+    def __init_subclass__(cls, domain=None, **kwargs):
+        super().__init_subclass__(**kwargs)
+
+
+_config_entries = sys.modules["homeassistant.config_entries"]
+_config_entries.OptionsFlow = _OptionsFlow
+_config_entries.ConfigFlow = _ConfigFlow
+sys.modules["homeassistant.data_entry_flow"].FlowResult = dict
+
+
 def _async_get_clientsession(_hass):  # noqa: D401 - stub function
     """Stand-in for HA's shared aiohttp session accessor."""
     raise RuntimeError("aiohttp_client.async_get_clientsession is stubbed in tests")

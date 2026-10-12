@@ -9,11 +9,13 @@ from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResult
 
 from .const import (
+    CONF_ALLOW_SUPPORT_ACTIONS,
     CONF_ENDPOINT_URL,
     CONF_GATEWAY_TOKEN,
     CONF_GATEWAY_URL,
     CONF_TIMEOUT,
     CONF_VERIFY_SSL,
+    DEFAULT_ALLOW_SUPPORT_ACTIONS,
     DEFAULT_GATEWAY_URL,
     DEFAULT_TIMEOUT_SECONDS,
     DEFAULT_VERIFY_SSL,
@@ -47,6 +49,12 @@ class StaykeyOptionsFlowHandler(config_entries.OptionsFlow):
                         data.get(CONF_GATEWAY_URL, DEFAULT_GATEWAY_URL),
                     ),
                 ): str,
+                vol.Optional(
+                    CONF_ALLOW_SUPPORT_ACTIONS,
+                    default=options.get(
+                        CONF_ALLOW_SUPPORT_ACTIONS, DEFAULT_ALLOW_SUPPORT_ACTIONS
+                    ),
+                ): bool,
                 vol.Optional(
                     CONF_VERIFY_SSL,
                     default=options.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),

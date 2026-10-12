@@ -13,11 +13,11 @@ primitive.
 
 ## Security model
 
+* Off unless the Home Assistant owner turns on the entry's "Allow support
+  actions" option (``SUPPORT_ACTIONS`` in :mod:`..services.ha_bridge`).
 * Only available to callers that have already authenticated to the
   Staykey gateway (same trust boundary as the rest of the gateway
   protocol).
-* Not exposed on the public REST webhook action list --- gateway channel
-  only.
 * Privilege level matches whatever Home Assistant already grants the
   integration user (comparable to Developer Tools » Services).
 """

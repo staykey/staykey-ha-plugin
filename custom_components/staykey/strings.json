@@ -25,9 +25,13 @@
         "data": {
           "gateway_token": "Gateway Token",
           "gateway_url": "Gateway URL",
+          "allow_support_actions": "Allow support actions",
           "verify_ssl": "Verify TLS certificates",
           "timeout": "Webhook timeout (seconds)",
           "endpoint_url": "Webhook URL (deprecated - migrate to a gateway token)"
+        },
+        "data_description": {
+          "allow_support_actions": "Lets Staykey run troubleshooting commands on this Home Assistant: call any service, read the codes stored on your locks, watch the event bus and list every device. Leave it off unless Staykey support asks you to turn it on, and turn it off again afterwards."
         }
       }
     }

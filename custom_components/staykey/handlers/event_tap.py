@@ -17,8 +17,10 @@ cannot leave listeners attached indefinitely.
 
 ## Security model
 
-Same as :mod:`..passthrough` — gateway-authenticated channel only, not on
-the public REST webhook surface, privilege bounded by the HA integration.
+Same as :mod:`..passthrough`: off unless the Home Assistant owner turns on
+the entry's "Allow support actions" option, reachable only over the
+authenticated gateway channel, and bounded by the privileges Home Assistant
+grants the integration.
 """
 
 from __future__ import annotations

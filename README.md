@@ -47,6 +47,7 @@ Available options:
 
 - **Gateway Token** — your Staykey-provided authentication token
 - **Gateway URL** — WebSocket endpoint (uses the default unless directed otherwise by Staykey)
+- **Allow support actions** — off by default. When on, Staykey can run troubleshooting commands on this Home Assistant instance: call any service, read the codes stored on your locks, watch the event bus, and list every device. Turn it on only while Staykey support is helping you, then turn it off again.
 - **Forward all notifications** — send all Z-Wave notifications, not just lock events
 - **Legacy Webhook URL (deprecated)** — HTTP endpoint for one-way event forwarding; shown only for existing webhook-mode installs migrating to a gateway token
 - **SSL verification** and **timeout** settings for the legacy webhook
@@ -77,6 +78,7 @@ If a legacy webhook URL is still configured, the integration only attempts webho
 - Communication uses an authenticated WebSocket over TLS
 - Only device state and event data needed by Staykey is transmitted
 - Staykey can only control the devices it has set up on this entry: each device command names a Staykey device, and the integration looks up that device's entity itself
+- Support actions (any service call, reading the codes stored on your locks, watching the event bus, listing every device) are off unless you turn on **Allow support actions**
 - No passwords, personal data, or network details are shared
 - The gateway token uniquely identifies your Home Assistant instance to your Staykey account
 

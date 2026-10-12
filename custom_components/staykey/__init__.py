@@ -22,11 +22,13 @@ from homeassistant.helpers.typing import ConfigType
 from homeassistant.loader import async_get_integration
 
 from .const import (
+    CONF_ALLOW_SUPPORT_ACTIONS,
     CONF_ENDPOINT_URL,
     CONF_GATEWAY_TOKEN,
     CONF_GATEWAY_URL,
     CONF_TIMEOUT,
     CONF_VERIFY_SSL,
+    DEFAULT_ALLOW_SUPPORT_ACTIONS,
     DEFAULT_GATEWAY_URL,
     DEFAULT_TIMEOUT_SECONDS,
     DEFAULT_VERIFY_SSL,
@@ -111,6 +113,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     verify_ssl: bool = options.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL)
     timeout_seconds: int = options.get(CONF_TIMEOUT, DEFAULT_TIMEOUT_SECONDS)
+    allow_support_actions: bool = options.get(
+        CONF_ALLOW_SUPPORT_ACTIONS, DEFAULT_ALLOW_SUPPORT_ACTIONS
+    )
 
     integration = await async_get_integration(hass, DOMAIN)
     plugin_version: str = integration.version or "0.0.0"
@@ -121,7 +126,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # --- Gateway mode ---
     if gateway_token:
-        command_handler = create_command_handler(hass, device_map)
+        command_handler = create_command_handler(
+            hass, device_map, allow_support_actions=allow_support_actions
+        )
 
         gateway_client = GatewayClient(
             hass=hass,
