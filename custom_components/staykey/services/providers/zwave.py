@@ -20,10 +20,9 @@ from homeassistant.helpers import entity_registry as er
 from ..lock_provider import CapabilityInfo, ProviderResult, SlotInfo
 
 try:
-    from zwave_js_server.const import CommandClass  # noqa: F401
+    from zwave_js_server.const import CommandClass
     from zwave_js_server.util.lock import (
         get_code_slots,  # noqa: F401  # kept for callers that still import it
-        get_usercode_from_node,
         get_usercodes,
     )
 
@@ -32,6 +31,10 @@ except ImportError:
     HAS_ZWAVE_LIB = False
 
 LOGGER = logging.getLogger(__name__)
+
+# ``userIdStatus`` in a User Code CC Report for a slot holding an active code
+# (``CodeSlotStatus.ENABLED`` in zwave-js-server-python).
+_USER_ID_STATUS_ENABLED = 1
 
 
 class ZwaveLockProvider:
@@ -209,7 +212,15 @@ async def _read_code_slots(
 async def _fetch_code_slot(
     hass: HomeAssistant, entity_id: str, slot: int
 ) -> dict[str, Any] | None:
-    """Actively query a single code slot from the lock over Z-Wave."""
+    """Actively query a single code slot from the lock over Z-Wave.
+
+    Reads the slot from the User Code CC Get's own response, not the
+    driver's ValueDB: when the lock sends no Report, zwave-js returns
+    nothing and the ValueDB still holds whatever was cached before.
+
+    Returns ``None`` if the Get could not be sent, and
+    ``{"responded": False}`` if the lock did not answer it.
+    """
     if not HAS_ZWAVE_LIB:
         return None
 
@@ -218,15 +229,23 @@ async def _fetch_code_slot(
         return None
 
     try:
-        result = await get_usercode_from_node(node, slot)
-        return {
-            "slot": result["code_slot"],
-            "occupied": result.get("in_use") is True,
-            "code": str(result["usercode"]) if result.get("usercode") else None,
-        }
+        report = await node.async_invoke_cc_api(
+            CommandClass.USER_CODE, "get", slot, wait_for_result=True
+        )
     except Exception:
         LOGGER.exception("Error fetching code slot %d for %s", slot, entity_id)
         return None
+
+    if report is None:
+        return {"slot": slot, "responded": False}
+
+    code = report.get("userCode")
+    return {
+        "slot": slot,
+        "responded": True,
+        "occupied": report.get("userIdStatus") == _USER_ID_STATUS_ENABLED,
+        "code": code if isinstance(code, str) and code else None,
+    }
 
 
 async def get_node_info(hass: HomeAssistant, entity_id: str) -> dict[str, Any] | None:
@@ -312,7 +331,9 @@ async def _set_and_verify_code(
     """Set a lock code and verify by actively querying the slot from the lock.
 
     Uses node.async_invoke_cc_api to fetch the slot value directly from the
-    lock rather than relying on the passive ValueDB cache.
+    lock rather than relying on the passive ValueDB cache, so a lock that
+    does not answer the read-back is reported as such rather than as a
+    readback mismatch.
     """
     last_error: str | None = None
 
@@ -332,25 +353,29 @@ async def _set_and_verify_code(
             await asyncio.sleep(verify_delay_s)
 
             result = await _fetch_code_slot(hass, entity_id, slot)
-            if result and result.get("occupied") and result.get("code") == str(code):
+            if result is None:
+                last_error = f"Slot {slot} could not be read from lock"
+            elif not result["responded"]:
+                # The slot's contents are unknown, which is not the same as
+                # the lock holding a different code.
+                last_error = f"Slot {slot}: lock did not respond to read-back"
+            elif result["occupied"] and result["code"] == str(code):
                 return ProviderResult(
                     slot=slot,
                     method="zwave_set_and_verify",
                     verified=True,
                     attempts=attempt + 1,
                 )
-            elif result:
+            else:
                 # NEVER include raw PINs in error strings — they can appear
                 # in activity history and aggregated logs. Compare lengths only.
-                actual = result.get("code")
+                actual = result["code"]
                 expected_len = len(str(code))
                 actual_len = len(str(actual)) if actual is not None else 0
                 last_error = (
                     f"Slot {slot} readback mismatch (expected_length={expected_len}, "
                     f"actual_length={actual_len})"
                 )
-            else:
-                last_error = f"Slot {slot} could not be read from lock"
 
         except Exception as exc:
             last_error = str(exc)
