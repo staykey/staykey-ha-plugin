@@ -9,13 +9,24 @@
           "gateway_token": "Gateway Token",
           "gateway_url": "Gateway URL"
         }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate Staykey",
+        "description": "Staykey no longer accepts this entry's gateway token. Copy the current token from your Staykey dashboard (Properties > Integrations > Home Assistant) and paste it here.",
+        "data": {
+          "gateway_token": "Gateway Token"
+        }
       }
     },
     "error": {
-      "gateway_token_required": "A gateway token is required. Copy it from your Staykey dashboard under Properties > Integrations > Home Assistant."
+      "gateway_token_required": "A gateway token is required. Copy it from your Staykey dashboard under Properties > Integrations > Home Assistant.",
+      "invalid_auth": "Staykey didn't accept this gateway token. Copy it again from your Staykey dashboard (Properties > Integrations > Home Assistant).",
+      "cannot_connect": "Couldn't reach the Staykey gateway. Check your internet connection and the gateway URL, then try again.",
+      "token_in_use": "Another Staykey entry on this Home Assistant already uses this gateway token."
     },
     "abort": {
-      "already_configured": "This integration is already configured."
+      "already_configured": "This integration is already configured.",
+      "reauth_successful": "The new gateway token works. Staykey is reconnecting."
     }
   },
   "options": {
@@ -31,6 +42,9 @@
           "allow_support_actions": "Off by default. While it is off, this integration refuses troubleshooting commands: calling any service, reading the codes stored on your locks, and watching the event bus. Staykey doesn't need them to run your properties."
         }
       }
+    },
+    "error": {
+      "token_in_use": "Another Staykey entry on this Home Assistant already uses this gateway token."
     }
   },
   "exceptions": {

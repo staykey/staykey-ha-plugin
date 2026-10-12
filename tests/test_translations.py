@@ -41,3 +41,32 @@ def test_no_webhook_strings_remain():
         "gateway_url",
         "allow_support_actions",
     }
+
+
+def test_token_check_errors_are_worded():
+    config = _load("strings.json")["config"]
+
+    assert "didn't accept this gateway token" in config["error"]["invalid_auth"]
+    assert "Couldn't reach the Staykey gateway" in config["error"]["cannot_connect"]
+    assert "already uses this gateway token" in config["error"]["token_in_use"]
+    # The existing error stays.
+    assert "gateway_token_required" in config["error"]
+
+
+def test_reauth_form_and_outcome_are_worded():
+    config = _load("strings.json")["config"]
+    reauth = config["step"]["reauth_confirm"]
+
+    assert reauth["title"] == "Re-authenticate Staykey"
+    assert "no longer accepts this entry's gateway token" in reauth["description"]
+    assert reauth["data"] == {"gateway_token": "Gateway Token"}
+    assert "Staykey is reconnecting" in config["abort"]["reauth_successful"]
+
+
+def test_options_word_a_token_in_use_like_setup():
+    strings = _load("strings.json")
+
+    assert (
+        strings["options"]["error"]["token_in_use"]
+        == strings["config"]["error"]["token_in_use"]
+    )

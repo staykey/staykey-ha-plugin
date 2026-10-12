@@ -38,7 +38,9 @@ Learn more at [getstaykey.com](https://getstaykey.com).
 
 ## Configuration
 
-During setup you provide your Staykey gateway token. After setup, you can adjust options from:
+During setup you provide your Staykey gateway token, and Staykey checks it before the integration is added. If the token later stops working, Home Assistant shows a re-authentication prompt for the entry: paste the current token from your Staykey dashboard (Properties > Integrations > Home Assistant) there.
+
+After setup, you can adjust options from:
 
 **Settings > Devices & Services > Staykey > Configure**
 
