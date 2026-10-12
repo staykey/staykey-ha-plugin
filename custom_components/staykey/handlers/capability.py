@@ -30,8 +30,8 @@ async def handle_get_capabilities(
     """Get detailed capability information for a device.
 
     The device is looked up by ``device_id`` in this entry's device map, as
-    every other action does. A request's ``external_id`` is ignored, so only
-    devices Staykey gave this entry can be inspected.
+    every other device action does. A request's ``external_id`` is ignored,
+    so only devices Staykey gave this entry can be inspected.
     """
     device_id = params.get("device_id", "")
     entity_id = device_map.get_entity_id(device_id)

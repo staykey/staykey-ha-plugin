@@ -76,7 +76,7 @@ If a legacy webhook URL is still configured, the integration only attempts webho
 
 - Communication uses an authenticated WebSocket over TLS
 - Only device state and event data needed by Staykey is transmitted
-- Staykey can only reach the devices it has set up on this entry: each command names a Staykey device, and the integration looks up that device's entity itself
+- Staykey can only control the devices it has set up on this entry: each device command names a Staykey device, and the integration looks up that device's entity itself
 - No passwords, personal data, or network details are shared
 - The gateway token uniquely identifies your Home Assistant instance to your Staykey account
 
