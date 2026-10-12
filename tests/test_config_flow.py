@@ -594,7 +594,8 @@ def test_reauth_with_the_token_in_use_reloads_without_checking_it(
     assert result["entry"] is entry
     # Nothing changes; Home Assistant reloads the entry all the same.
     assert result["changes"] == {}
-    assert result["reason"] == "reauth_successful"
+    # Not "the new token works": it hasn't been checked.
+    assert result["reason"] == "reauth_retry"
 
 
 def test_reauth_checks_a_setup_token_that_the_options_replaced(probe):

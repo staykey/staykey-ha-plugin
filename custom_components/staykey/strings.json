@@ -12,7 +12,7 @@
       },
       "reauth_confirm": {
         "title": "Re-authenticate Staykey",
-        "description": "Staykey no longer accepts this entry's gateway token. Copy the current token from your Staykey dashboard (Properties > Integrations > Home Assistant) and paste it here.",
+        "description": "Staykey didn't accept this entry's gateway token. Paste the current token from your Staykey dashboard (Properties > Integrations > Home Assistant). If you haven't changed it, this prompt closes on its own once Staykey accepts the token again.",
         "data": {
           "gateway_token": "Gateway Token"
         }
@@ -27,7 +27,8 @@
     },
     "abort": {
       "already_configured": "This integration is already configured.",
-      "reauth_successful": "The new gateway token works. Staykey is reconnecting."
+      "reauth_successful": "The new gateway token works. Staykey is reconnecting.",
+      "reauth_retry": "Staykey is trying this gateway token again. If it still isn't accepted, Home Assistant will ask again."
     }
   },
   "options": {

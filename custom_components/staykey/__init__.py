@@ -44,9 +44,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     data = entry.data
     options = entry.options
 
+    # Stripped: older versions saved the token as typed, spaces and all.
     gateway_token: str = (
         options.get(CONF_GATEWAY_TOKEN) or data.get(CONF_GATEWAY_TOKEN) or ""
-    )
+    ).strip()
     gateway_url: str = (
         options.get(CONF_GATEWAY_URL)
         or data.get(CONF_GATEWAY_URL)

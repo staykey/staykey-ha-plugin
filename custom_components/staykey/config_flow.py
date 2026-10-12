@@ -190,8 +190,8 @@ class StaykeyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             elif gateway_token == _current_token(entry):
                 # This entry is still retrying that token, so checking it as
                 # well would take the entry's connection over. Reload the
-                # entry to try it again instead.
-                return self.async_update_reload_and_abort(entry)
+                # entry to try it again instead, without claiming it works.
+                return self.async_update_reload_and_abort(entry, reason="reauth_retry")
             elif _token_in_use_elsewhere(self.hass, gateway_token, entry.entry_id):
                 errors["base"] = "token_in_use"
             else:

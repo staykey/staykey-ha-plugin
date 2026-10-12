@@ -72,6 +72,7 @@ def _set_up(monkeypatch, entry):
     [
         pytest.param({"endpoint_url": WEBHOOK_URL}, id="webhook-only"),
         pytest.param({}, id="no-token"),
+        pytest.param({CONF_GATEWAY_TOKEN: " \n "}, id="whitespace-only-token"),
     ],
 )
 def test_entry_without_a_gateway_token_fails_setup_with_a_reason(monkeypatch, data):
@@ -92,6 +93,36 @@ def test_a_leftover_webhook_url_is_ignored_on_a_gateway_entry(monkeypatch):
     assert "zwave_js_value_updated" not in listeners
     assert len(listeners["zwave_js_notification"]) == 1
     assert len(listeners["zwave_js_value_notification"]) == 1
+
+
+@pytest.mark.parametrize(
+    ("data", "options"),
+    [
+        pytest.param({CONF_GATEWAY_TOKEN: " token-abc\n"}, {}, id="setup-token"),
+        pytest.param(
+            {CONF_GATEWAY_TOKEN: "token-old"},
+            {CONF_GATEWAY_TOKEN: " token-abc "},
+            id="options-token",
+        ),
+    ],
+)
+def test_a_token_saved_with_spaces_reaches_the_client_without_them(
+    monkeypatch, data, options
+):
+    made: list[dict] = []
+
+    class _RecordingClient(_StubGatewayClient):
+        def __init__(self, **kwargs):
+            super().__init__(**kwargs)
+            made.append(kwargs)
+
+    monkeypatch.setattr(staykey, "GatewayClient", _RecordingClient)
+    hass = SimpleNamespace(bus=_FakeBus(), data={})
+
+    ok = _run(staykey.async_setup_entry(hass, _FakeEntry(data, options)))
+
+    assert ok is True
+    assert [kwargs["gateway_token"] for kwargs in made] == ["token-abc"]
 
 
 def test_setup_registers_no_update_listener(monkeypatch):

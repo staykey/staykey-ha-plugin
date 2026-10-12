@@ -58,9 +58,25 @@ def test_reauth_form_and_outcome_are_worded():
     reauth = config["step"]["reauth_confirm"]
 
     assert reauth["title"] == "Re-authenticate Staykey"
-    assert "no longer accepts this entry's gateway token" in reauth["description"]
+    # The prompt can open while Staykey can't check tokens, and then closes
+    # by itself, so it doesn't claim the token is no longer valid.
+    assert reauth["description"] == (
+        "Staykey didn't accept this entry's gateway token. Paste the current"
+        " token from your Staykey dashboard (Properties > Integrations > Home"
+        " Assistant). If you haven't changed it, this prompt closes on its own"
+        " once Staykey accepts the token again."
+    )
     assert reauth["data"] == {"gateway_token": "Gateway Token"}
     assert "Staykey is reconnecting" in config["abort"]["reauth_successful"]
+
+
+def test_re_entering_the_same_token_is_worded():
+    abort = _load("strings.json")["config"]["abort"]
+
+    assert abort["reauth_retry"] == (
+        "Staykey is trying this gateway token again. If it still isn't"
+        " accepted, Home Assistant will ask again."
+    )
 
 
 def test_options_word_a_token_in_use_like_setup():
