@@ -1,3 +1,16 @@
+## [2.0.0-beta.3](https://github.com/staykey/staykey-ha-plugin/compare/v2.0.0-beta.2...v2.0.0-beta.3) (2026-10-12)
+
+
+### Features
+
+* **staykey:** check the gateway token when it is entered ([8c6117f](https://github.com/staykey/staykey-ha-plugin/commit/8c6117fb133d0efca97eaf267e405b0732f8a078))
+
+
+### Bug Fixes
+
+* **staykey:** keep retrying a rejected token and clear the prompt when it works ([a354518](https://github.com/staykey/staykey-ha-plugin/commit/a35451825b2ca127bfe36dbe65777ca71f83b8ab))
+* **staykey:** say what re-entering the same token does, and strip the stored token ([c434ae4](https://github.com/staykey/staykey-ha-plugin/commit/c434ae47fe407190ca3e101868d60980088173a9))
+
 ## [2.0.0-beta.2](https://github.com/staykey/staykey-ha-plugin/compare/v2.0.0-beta.1...v2.0.0-beta.2) (2026-10-12)
 
 
