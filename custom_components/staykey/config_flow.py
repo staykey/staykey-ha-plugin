@@ -34,14 +34,16 @@ class StaykeyOptionsFlowHandler(config_entries.OptionsFlowWithReload):
 
         options = self.config_entry.options
         data = self.config_entry.data
+        token = options.get(CONF_GATEWAY_TOKEN, data.get(CONF_GATEWAY_TOKEN)) or None
 
         schema = vol.Schema(
             {
-                vol.Optional(
+                # Required, and pre-filled rather than defaulted: a default
+                # would quietly put the saved token back when the field is
+                # cleared, where required makes the form say it is needed.
+                vol.Required(
                     CONF_GATEWAY_TOKEN,
-                    default=options.get(
-                        CONF_GATEWAY_TOKEN, data.get(CONF_GATEWAY_TOKEN, "")
-                    ),
+                    description={"suggested_value": token},
                 ): str,
                 vol.Optional(
                     CONF_GATEWAY_URL,
