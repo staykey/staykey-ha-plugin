@@ -29,26 +29,14 @@ async def handle_get_capabilities(
 ) -> dict[str, Any]:
     """Get detailed capability information for a device.
 
-    Accepts ``external_id`` (the HA ``entity_id``) **or** ``device_id``
-    (resolved through the device map). Matches the dual-key convention in
-    :mod:`..handlers.lock`.
+    The device is looked up by ``device_id`` in this entry's device map, as
+    every other device action does. A request's ``external_id`` is ignored,
+    so only devices Staykey gave this entry can be inspected.
     """
-    external_id = params.get("external_id", "")
     device_id = params.get("device_id", "")
-
-    entity_id: str
-    if external_id:
-        entity_id = external_id
-        if not device_id:
-            device_id = device_map.get_device_id(entity_id) or ""
-    else:
-        entity_id = device_map.get_entity_id(device_id) or ""
-        if not entity_id:
-            raise ValueError(
-                "get_capabilities: provide external_id (entity_id) or a "
-                f"device_id known to the device map; got "
-                f"device_id={device_id!r}"
-            )
+    entity_id = device_map.get_entity_id(device_id)
+    if not entity_id:
+        raise ValueError(f"Unknown device_id: {device_id}")
 
     capabilities: dict[str, Any] = {
         "device_id": device_id,

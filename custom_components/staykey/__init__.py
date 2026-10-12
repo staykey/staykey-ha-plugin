@@ -2,38 +2,26 @@
 
 from __future__ import annotations
 
-import asyncio
-import json
 import logging
-import re
-import uuid
-from datetime import timezone
-from typing import Any
 
-from aiohttp import ClientError
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant
+from homeassistant.exceptions import ConfigEntryError
 from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers import issue_registry as ir
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers import instance_id
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.loader import async_get_integration
 
 from .const import (
-    CONF_ENDPOINT_URL,
+    CONF_ALLOW_SUPPORT_ACTIONS,
     CONF_GATEWAY_TOKEN,
     CONF_GATEWAY_URL,
-    CONF_TIMEOUT,
-    CONF_VERIFY_SSL,
+    DEFAULT_ALLOW_SUPPORT_ACTIONS,
     DEFAULT_GATEWAY_URL,
-    DEFAULT_TIMEOUT_SECONDS,
-    DEFAULT_VERIFY_SSL,
     DOMAIN,
     ZWAVE_NOTIFICATION_EVENT,
     ZWAVE_VALUE_NOTIFICATION_EVENT,
-    ZWAVE_VALUE_UPDATED_EVENT,
 )
 from .device_map import DeviceMap
 from .events import device_event_payload, state_update_payload
@@ -51,418 +39,209 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     return True
 
 
-async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Handle options updates by reloading the config entry."""
-    await hass.config_entries.async_reload(entry.entry_id)
-
-
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Staykey from a config entry."""
     data = entry.data
     options = entry.options
 
+    # Stripped: older versions saved the token as typed, spaces and all.
     gateway_token: str = (
         options.get(CONF_GATEWAY_TOKEN) or data.get(CONF_GATEWAY_TOKEN) or ""
-    )
+    ).strip()
     gateway_url: str = (
         options.get(CONF_GATEWAY_URL)
         or data.get(CONF_GATEWAY_URL)
         or DEFAULT_GATEWAY_URL
     )
-    endpoint_url: str = (
-        options.get(CONF_ENDPOINT_URL) or data.get(CONF_ENDPOINT_URL) or ""
+
+    # Staykey connects only through its gateway. An entry with no token, such
+    # as one set up for the removed webhook mode, has nothing to run: setup
+    # stops here and the reason shows on the entry. Saving a token through
+    # Configure reloads the entry.
+    if not gateway_token:
+        raise ConfigEntryError(
+            translation_domain=DOMAIN,
+            translation_key="gateway_token_required",
+        )
+
+    allow_support_actions: bool = options.get(
+        CONF_ALLOW_SUPPORT_ACTIONS, DEFAULT_ALLOW_SUPPORT_ACTIONS
     )
-
-    if not gateway_token and not endpoint_url:
-        LOGGER.error(
-            "Staykey missing both gateway token and webhook URL; aborting setup"
-        )
-        return False
-
-    # Staykey has retired the legacy webhook endpoint in favor of the gateway
-    # connection. Webhook-only entries get a Repairs issue prompting
-    # migration; the issue clears once the entry has a gateway token.
-    webhook_issue_id = f"webhook_mode_deprecated_{entry.entry_id}"
-    if endpoint_url and not gateway_token:
-        LOGGER.warning(
-            "Staykey is configured in legacy webhook mode, but Staykey has "
-            "retired the webhook endpoint - events sent this way no longer "
-            "reach Staykey. Reconfigure the integration with a gateway token "
-            "from your Staykey dashboard (Properties > Integrations > Home "
-            "Assistant)"
-        )
-        ir.async_create_issue(
-            hass,
-            DOMAIN,
-            webhook_issue_id,
-            is_fixable=False,
-            severity=ir.IssueSeverity.WARNING,
-            translation_key="webhook_mode_deprecated",
-            learn_more_url="https://getstaykey.com/help/installing-staykey-hacs-plugin",
-        )
-    else:
-        ir.async_delete_issue(hass, DOMAIN, webhook_issue_id)
-        if endpoint_url:
-            LOGGER.info(
-                "Staykey legacy webhook URL is configured as a gateway "
-                "fallback, but Staykey has retired the webhook endpoint - "
-                "fallback sends will fail and the URL can be removed"
-            )
-
-    verify_ssl: bool = options.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL)
-    timeout_seconds: int = options.get(CONF_TIMEOUT, DEFAULT_TIMEOUT_SECONDS)
 
     integration = await async_get_integration(hass, DOMAIN)
     plugin_version: str = integration.version or "0.0.0"
 
+    # Home Assistant's installation ID, a random identifier it creates once.
+    # Every Staykey entry on this Home Assistant reports the same one, which
+    # is how Staykey recognises a lock that two properties share as one lock.
+    ha_instance_id: str = await instance_id.async_get(hass)
+
     unsubscribers: list[CALLBACK_TYPE] = []
-    gateway_client: GatewayClient | None = None
     device_map = DeviceMap()
+    command_handler = create_command_handler(
+        hass, device_map, allow_support_actions=allow_support_actions
+    )
 
-    # --- Gateway mode ---
-    if gateway_token:
-        command_handler = create_command_handler(hass, device_map)
+    gateway_client = GatewayClient(
+        hass=hass,
+        gateway_url=gateway_url,
+        gateway_token=gateway_token,
+        agent_version=plugin_version,
+        device_map=device_map,
+        command_handler=command_handler,
+        config_entry=entry,
+        instance_id=ha_instance_id,
+    )
 
-        gateway_client = GatewayClient(
-            hass=hass,
-            gateway_url=gateway_url,
-            gateway_token=gateway_token,
-            agent_version=plugin_version,
-            device_map=device_map,
-            command_handler=command_handler,
-            config_entry=entry,
+    await gateway_client.start()
+    LOGGER.info("Staykey gateway client started (url=%s)", gateway_url)
+
+    # State streaming: push state_changed events for tracked entities.
+    #
+    # The listener stays on the global state_changed bus rather than
+    # being scoped to the tracked entities: the device map changes while
+    # the integration is running (entity renames, device reconcile), so a
+    # scoped subscription would have to be torn down and rebuilt on every
+    # one of those changes.
+    async def handle_state_changed(event: Event) -> None:
+        entity_id = event.data.get("entity_id", "")
+        if not device_map.is_tracked(entity_id):
+            return
+
+        sk_device_id = device_map.get_device_id(entity_id)
+        if not sk_device_id:
+            return
+
+        new_state = event.data.get("new_state")
+        if not new_state:
+            return
+
+        # Battery/health alerts fire regardless of state filtering, and
+        # must stay ahead of it: a battery report is exactly the
+        # attribute-only event the filter below drops, so only the state
+        # forward is skipped for one, never the alert.
+        attrs = new_state.attributes or {}
+        if "battery_level" in attrs:
+            battery = attrs["battery_level"]
+            if isinstance(battery, (int, float)) and battery <= 15:
+                await gateway_client.send_health_alert(
+                    "low_battery",
+                    {
+                        "device_id": sk_device_id,
+                        "battery_level": battery,
+                    },
+                )
+
+        old_state = event.data.get("old_state")
+        if old_state is None:
+            # No previous state means Home Assistant is restoring the
+            # entity (startup, or a config entry reload), not reporting a
+            # change. A restart is already signalled once through the
+            # homeassistant_started health alert, so it does not also
+            # arrive as a burst of state updates.
+            return
+
+        # Compare against the state the event itself carries rather than
+        # against a remembered one: nothing survives a restart or a
+        # reload to compare with, and a hub with two config entries would
+        # hold two separate memories of it.
+        if not should_forward_state(entity_id, new_state.state, old_state.state):
+            return
+
+        await gateway_client.send_state_update(
+            sk_device_id, state_update_payload(new_state)
         )
 
-        await gateway_client.start()
-        LOGGER.info("Staykey gateway client started (url=%s)", gateway_url)
+    unsubscribers.append(hass.bus.async_listen("state_changed", handle_state_changed))
 
-        # State streaming: push state_changed events for tracked entities.
-        #
-        # The listener stays on the global state_changed bus rather than
-        # being scoped to the tracked entities: the device map changes while
-        # the integration is running (entity renames, device reconcile), so a
-        # scoped subscription would have to be torn down and rebuilt on every
-        # one of those changes.
-        async def handle_state_changed(event: Event) -> None:
+    # Entity rename detection
+    async def handle_entity_registry_updated(event: Event) -> None:
+        action = event.data.get("action")
+        if action == "update":
+            old_entity_id = event.data.get("old_entity_id")
+            new_entity_id = event.data.get("entity_id")
+            if old_entity_id and new_entity_id and device_map.is_tracked(old_entity_id):
+                sk_device_id = device_map.get_device_id(old_entity_id)
+                if sk_device_id:
+                    device_map.update_entity_id(
+                        sk_device_id, old_entity_id, new_entity_id
+                    )
+                    await gateway_client.send_entity_id_changed(
+                        sk_device_id, old_entity_id, new_entity_id
+                    )
+                    LOGGER.info(
+                        "Entity renamed: %s -> %s (device %s)",
+                        old_entity_id,
+                        new_entity_id,
+                        sk_device_id,
+                    )
+        elif action == "remove":
             entity_id = event.data.get("entity_id", "")
-            if not device_map.is_tracked(entity_id):
-                return
-
-            sk_device_id = device_map.get_device_id(entity_id)
-            if not sk_device_id:
-                return
-
-            new_state = event.data.get("new_state")
-            if not new_state:
-                return
-
-            # Battery/health alerts fire regardless of state filtering, and
-            # must stay ahead of it: a battery report is exactly the
-            # attribute-only event the filter below drops, so only the state
-            # forward is skipped for one, never the alert.
-            attrs = new_state.attributes or {}
-            if "battery_level" in attrs:
-                battery = attrs["battery_level"]
-                if isinstance(battery, (int, float)) and battery <= 15:
+            if device_map.is_tracked(entity_id):
+                sk_device_id = device_map.get_device_id(entity_id)
+                if sk_device_id:
                     await gateway_client.send_health_alert(
-                        "low_battery",
+                        "entity_removed",
                         {
                             "device_id": sk_device_id,
-                            "battery_level": battery,
+                            "external_id": entity_id,
                         },
                     )
-
-            old_state = event.data.get("old_state")
-            if old_state is None:
-                # No previous state means Home Assistant is restoring the
-                # entity (startup, or a config entry reload), not reporting a
-                # change. A restart is already signalled once through the
-                # homeassistant_started health alert, so it does not also
-                # arrive as a burst of state updates.
-                return
-
-            # Compare against the state the event itself carries rather than
-            # against a remembered one: nothing survives a restart or a
-            # reload to compare with, and a hub with two config entries would
-            # hold two separate memories of it.
-            if not should_forward_state(entity_id, new_state.state, old_state.state):
-                return
-
-            await gateway_client.send_state_update(
-                sk_device_id, state_update_payload(new_state)
-            )
-
-        unsubscribers.append(
-            hass.bus.async_listen("state_changed", handle_state_changed)
-        )
-
-        # Entity rename detection
-        async def handle_entity_registry_updated(event: Event) -> None:
-            action = event.data.get("action")
-            if action == "update":
-                old_entity_id = event.data.get("old_entity_id")
-                new_entity_id = event.data.get("entity_id")
-                if (
-                    old_entity_id
-                    and new_entity_id
-                    and device_map.is_tracked(old_entity_id)
-                ):
-                    sk_device_id = device_map.get_device_id(old_entity_id)
-                    if sk_device_id:
-                        device_map.update_entity_id(
-                            sk_device_id, old_entity_id, new_entity_id
-                        )
-                        await gateway_client.send_entity_id_changed(
-                            sk_device_id, old_entity_id, new_entity_id
-                        )
-                        LOGGER.info(
-                            "Entity renamed: %s -> %s (device %s)",
-                            old_entity_id,
-                            new_entity_id,
-                            sk_device_id,
-                        )
-            elif action == "remove":
-                entity_id = event.data.get("entity_id", "")
-                if device_map.is_tracked(entity_id):
-                    sk_device_id = device_map.get_device_id(entity_id)
-                    if sk_device_id:
-                        await gateway_client.send_health_alert(
-                            "entity_removed",
-                            {
-                                "device_id": sk_device_id,
-                                "external_id": entity_id,
-                            },
-                        )
-                        LOGGER.warning(
-                            "Tracked entity removed: %s (device %s)",
-                            entity_id,
-                            sk_device_id,
-                        )
-
-        unsubscribers.append(
-            hass.bus.async_listen(
-                "entity_registry_updated", handle_entity_registry_updated
-            )
-        )
-
-        # HA restart detection
-        async def handle_homeassistant_started(event: Event) -> None:
-            if gateway_client and gateway_client.connected:
-                await gateway_client.send_health_alert(
-                    "ha_restarted",
-                    {"event": "homeassistant_started"},
-                )
-                LOGGER.info("HA restart detected, notified gateway")
-
-        unsubscribers.append(
-            hass.bus.async_listen("homeassistant_started", handle_homeassistant_started)
-        )
-
-    # --- Webhook mode (legacy, always active if URL is configured) ---
-    if endpoint_url:
-        session = async_get_clientsession(hass)
-
-        def _json_default(obj: Any) -> str:
-            iso = getattr(obj, "isoformat", None)
-            if callable(iso):
-                return iso()
-            value = getattr(obj, "value", None)
-            if value is not None and not callable(value):
-                return str(value)
-            return str(obj)
-
-        async def send_webhook(payload: dict[str, Any]) -> None:
-            body = json.dumps(payload, separators=(",", ":"), default=_json_default)
-            headers = {"Content-Type": "application/json"}
-            try:
-                async with asyncio.timeout(timeout_seconds):
-                    resp = await session.post(
-                        endpoint_url, data=body, headers=headers, ssl=verify_ssl
+                    LOGGER.warning(
+                        "Tracked entity removed: %s (device %s)",
+                        entity_id,
+                        sk_device_id,
                     )
-                    if resp.status >= 400:
-                        text = await resp.text()
-                        LOGGER.warning(
-                            "Staykey webhook failed: %s %s - %s",
-                            resp.status,
-                            resp.reason,
-                            text,
-                        )
-            except (asyncio.TimeoutError, ClientError) as err:
-                LOGGER.warning("Staykey webhook error: %s", err)
 
-        def _is_lock_event(event: Event) -> bool:
-            if event.event_type != ZWAVE_NOTIFICATION_EVENT:
-                return False
-            d = event.data or {}
-            return (
-                d.get("command_class") == 113
-                and d.get("type") == 6
-                and d.get("event") in (1, 2, 6)
+    unsubscribers.append(
+        hass.bus.async_listen("entity_registry_updated", handle_entity_registry_updated)
+    )
+
+    # HA restart detection
+    async def handle_homeassistant_started(event: Event) -> None:
+        if gateway_client.connected:
+            await gateway_client.send_health_alert(
+                "ha_restarted",
+                {"event": "homeassistant_started"},
             )
+            LOGGER.info("HA restart detected, notified gateway")
 
-        async def handle_webhook_event(event: Event) -> None:
-            if not _is_lock_event(event):
-                return
-
-            # A gateway client forwards every event and buffers them while
-            # disconnected, so the webhook path only runs in webhook-only mode.
-            if gateway_client:
-                return
-
-            origin = getattr(event, "origin", None)
-            if origin is not None:
-                origin = getattr(origin, "value", origin)
-                origin = str(origin)
-            time_fired = getattr(event, "time_fired", None)
-            if time_fired is not None:
-                occurred_at = (
-                    time_fired.astimezone(timezone.utc)
-                    .isoformat()
-                    .replace("+00:00", "Z")
-                )
-            else:
-                occurred_at = None
-
-            d = event.data or {}
-            raw_label: str = (d.get("event_label") or "").strip()
-
-            def _to_snake(label: str) -> str:
-                label = label.lower()
-                label = re.sub(r"[^a-z0-9]+", "_", label)
-                label = re.sub(r"_+", "_", label).strip("_")
-                return label
-
-            normalized_type = (
-                _to_snake(raw_label) if raw_label else f"{event.event_type}"
-            )
-
-            params = d.get("parameters") or {}
-            code_slot = (
-                params.get("codeId")
-                or params.get("userId")
-                or d.get("code_slot")
-                or d.get("code_slot_id")
-            )
-            evt_id = d.get("event")
-            if evt_id in (1, 2):
-                method = "manual"
-            elif evt_id == 6:
-                method = "keypad"
-            else:
-                method = "unknown"
-
-            lower_label = raw_label.lower()
-            result = (
-                "failure"
-                if any(x in lower_label for x in ("fail", "error", "invalid"))
-                else "success"
-            )
-
-            device_reg = dr.async_get(hass)
-            entity_reg = er.async_get(hass)
-            device_id = d.get("device_id")
-            entity_id: str | None = None
-            device_name: str | None = None
-            manufacturer: str | None = None
-            model: str | None = None
-
-            if device_id:
-                device = device_reg.async_get(device_id)
-                if device:
-                    device_name = device.name_by_user or device.name
-                    manufacturer = device.manufacturer
-                    model = device.model
-                    ents = er.async_entries_for_device(
-                        entity_reg, device_id, include_disabled_entities=False
-                    )
-                    lock_entities = [e for e in ents if e.domain == "lock"]
-                    chosen = (
-                        lock_entities[0]
-                        if lock_entities
-                        else (ents[0] if ents else None)
-                    )
-                    if chosen:
-                        entity_id = chosen.entity_id
-
-            payload: dict[str, Any] = {
-                "schema_version": "1.0",
-                "event_id": str(uuid.uuid4()),
-                "occurred_at": occurred_at,
-                "event_type": normalized_type,
-                "device": {
-                    "device_id": device_id,
-                    "entity_id": entity_id,
-                    "name": device_name,
-                    "manufacturer": manufacturer,
-                    "model": model,
-                },
-                "access": {
-                    "method": method,
-                    "code_slot": code_slot,
-                    "result": result,
-                },
-                "plugin": {
-                    "version": plugin_version,
-                    "instance_url": hass.config.external_url
-                    or hass.config.internal_url,
-                },
-                "ha": {
-                    "event_type": event.event_type,
-                    "event_label": d.get("event_label"),
-                    "node_id": d.get("node_id"),
-                    "command_class_name": d.get("command_class_name")
-                    or d.get("command_class"),
-                    "origin": origin,
-                },
-            }
-
-            await send_webhook(payload)
-
-        for event_type in (
-            ZWAVE_NOTIFICATION_EVENT,
-            ZWAVE_VALUE_NOTIFICATION_EVENT,
-            ZWAVE_VALUE_UPDATED_EVENT,
-        ):
-            unsubscribers.append(
-                hass.bus.async_listen(event_type, handle_webhook_event)
-            )
+    unsubscribers.append(
+        hass.bus.async_listen("homeassistant_started", handle_homeassistant_started)
+    )
 
     # --- Z-Wave event forwarding over gateway ---
-    if gateway_client:
+    async def handle_zwave_event_gateway(event: Event) -> None:
+        d = event.data or {}
+        entity_reg = er.async_get(hass)
+        ha_device_id = d.get("device_id")
+        sk_device_id: str | None = None
 
-        async def handle_zwave_event_gateway(event: Event) -> None:
-            d = event.data or {}
-            entity_reg = er.async_get(hass)
-            ha_device_id = d.get("device_id")
-            sk_device_id: str | None = None
-
-            if ha_device_id:
-                ents = er.async_entries_for_device(
-                    entity_reg, ha_device_id, include_disabled_entities=False
-                )
-                lock_entities = [e for e in ents if e.domain == "lock"]
-                chosen = (
-                    lock_entities[0] if lock_entities else (ents[0] if ents else None)
-                )
-                if chosen:
-                    sk_device_id = device_map.get_device_id(chosen.entity_id)
-
-            if not sk_device_id:
-                return
-
-            LOGGER.debug("Forwarding %s for device %s", event.event_type, sk_device_id)
-
-            await gateway_client.send_event(
-                "device_event", device_event_payload(event, sk_device_id)
+        if ha_device_id:
+            ents = er.async_entries_for_device(
+                entity_reg, ha_device_id, include_disabled_entities=False
             )
+            lock_entities = [e for e in ents if e.domain == "lock"]
+            chosen = lock_entities[0] if lock_entities else (ents[0] if ents else None)
+            if chosen:
+                sk_device_id = device_map.get_device_id(chosen.entity_id)
 
-        for event_type in (
-            ZWAVE_NOTIFICATION_EVENT,
-            ZWAVE_VALUE_NOTIFICATION_EVENT,
-        ):
-            unsubscribers.append(
-                hass.bus.async_listen(event_type, handle_zwave_event_gateway)
-            )
+        if not sk_device_id:
+            return
+
+        LOGGER.debug("Forwarding %s for device %s", event.event_type, sk_device_id)
+
+        await gateway_client.send_event(
+            "device_event", device_event_payload(event, sk_device_id)
+        )
+
+    for event_type in (
+        ZWAVE_NOTIFICATION_EVENT,
+        ZWAVE_VALUE_NOTIFICATION_EVENT,
+    ):
+        unsubscribers.append(
+            hass.bus.async_listen(event_type, handle_zwave_event_gateway)
+        )
 
     # KNOWN LIMITATION (early Matter lock support):
     #
@@ -480,10 +259,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "device_map": device_map,
     }
 
-    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
-
-    mode = "gateway" if gateway_token else "webhook-only"
-    LOGGER.info("Staykey set up in %s mode.", mode)
+    LOGGER.info("Staykey set up in gateway mode.")
     return True
 
 
@@ -502,11 +278,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await gw.stop()
 
     return True
-
-
-async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Clean up when a config entry is removed for good."""
-    ir.async_delete_issue(hass, DOMAIN, f"webhook_mode_deprecated_{entry.entry_id}")
 
 
 async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:

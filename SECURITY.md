@@ -19,12 +19,12 @@ you updated on remediation progress.
 
 This integration handles sensitive credentials. In particular it:
 
-- stores a **Staykey API token**, and
-- posts smart-lock and device events to a **configured webhook/gateway over TLS**.
+- stores a **Staykey gateway token**, and
+- sends smart-lock and device events to the **Staykey gateway over TLS**.
 
 Please flag any issue that could lead to mishandling of those secrets — for
-example, a token or webhook URL being written to logs, exposed in diagnostics,
-transmitted without TLS, or leaked through an error message.
+example, a token being written to logs, exposed in diagnostics, transmitted
+without TLS, or leaked through an error message.
 
 ## Supported versions
 

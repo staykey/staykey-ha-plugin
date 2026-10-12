@@ -12,11 +12,10 @@ Learn more at [getstaykey.com](https://getstaykey.com).
 
 ## Features
 
-- **Gateway mode** — persistent WebSocket connection to Staykey for real-time, two-way device control and state streaming
+- **Gateway connection** — a persistent WebSocket connection to Staykey for real-time, two-way device control and state streaming
 - **Automatic device discovery** — Staykey discovers supported devices (locks, climate, covers, switches, lights, sensors) from your Home Assistant instance
 - **Z-Wave lock support** — keypad code management, lock/unlock, and activity event forwarding
 - **State streaming** — device state changes are forwarded to Staykey in real time
-- **Legacy webhook mode (retired)** — one-way event forwarding via HTTP POST. Staykey has retired the webhook endpoint, so events sent this way no longer reach Staykey; webhook-mode installs must switch to a gateway token. New installs are gateway-only.
 - **Offline buffering** — events are queued when the connection is temporarily unavailable and sent on reconnect
 
 ## Requirements
@@ -39,7 +38,9 @@ Learn more at [getstaykey.com](https://getstaykey.com).
 
 ## Configuration
 
-During setup you provide your Staykey gateway token. After setup, you can adjust options from:
+During setup you provide your Staykey gateway token, and Staykey checks it when you add the integration. If Staykey later stops accepting a running entry's token, Home Assistant asks for a new one with a re-authentication prompt for the entry: paste the current token from your Staykey dashboard (Properties > Integrations > Home Assistant) there. The integration keeps trying to connect in the meantime, and the prompt clears itself if the token starts working again.
+
+After setup, you can adjust options from:
 
 **Settings > Devices & Services > Staykey > Configure**
 
@@ -47,9 +48,7 @@ Available options:
 
 - **Gateway Token** — your Staykey-provided authentication token
 - **Gateway URL** — WebSocket endpoint (uses the default unless directed otherwise by Staykey)
-- **Forward all notifications** — send all Z-Wave notifications, not just lock events
-- **Legacy Webhook URL (deprecated)** — HTTP endpoint for one-way event forwarding; shown only for existing webhook-mode installs migrating to a gateway token
-- **SSL verification** and **timeout** settings for the legacy webhook
+- **Allow support access** — off by default. Turn it on to let Staykey support debug this Home Assistant: call any service, read the codes stored on your locks, and watch its events. Leave it off unless Staykey support asks you to turn it on, and turn it off again afterwards.
 
 ## Supported Devices
 
@@ -57,7 +56,7 @@ Available options:
 |------|-------------|
 | Locks | Lock, unlock, user code management, activity events |
 | Climate | Set temperature, set HVAC mode |
-| Covers | Open, close, stop |
+| Covers | Open, close |
 | Switches | Turn on, turn off |
 | Lights | Turn on, turn off |
 | Sensors | State reporting |
@@ -70,14 +69,18 @@ When configured with a gateway token, the integration maintains a persistent con
 - Device state changes are streamed to Staykey in real time
 - Lock activity events (keypad codes, manual operations) are forwarded automatically
 
-If a legacy webhook URL is still configured, the integration only attempts webhook sends when the gateway connection is unavailable — but Staykey has retired the webhook endpoint, so those sends fail and the URL can be removed. Integrations running in webhook-only mode raise a Repairs issue in Home Assistant with migration steps ([migration guide](https://getstaykey.com/help/installing-staykey-hacs-plugin)).
+The integration connects only through the gateway; webhook mode has been removed. An entry set up for webhook mode, with no gateway token, fails to set up and says why on its entry in **Settings > Devices & Services**. Copy the gateway token from your Staykey dashboard (Properties > Integrations > Home Assistant), add it under **Configure**, and the integration reloads and connects ([setup guide](https://getstaykey.com/help/installing-staykey-hacs-plugin)).
 
 ## Security & Privacy
 
 - Communication uses an authenticated WebSocket over TLS
-- Only device state and event data needed by Staykey is transmitted
-- No passwords, personal data, or network details are shared
 - The gateway token uniquely identifies your Home Assistant instance to your Staykey account
+- Each connection also sends your Home Assistant installation ID, a random identifier Home Assistant keeps for this installation. Every Staykey entry on the same Home Assistant sends the same ID, which lets Staykey recognise a lock shared by two properties as one lock
+- With **Allow support access** off (the default):
+  - only the device state and event data Staykey needs is transmitted
+  - Staykey can only control the devices it has set up on this entry: each device command names a Staykey device, and the integration looks up that device's entity itself
+  - no passwords, personal data, or network details are shared
+- With **Allow support access** on, Staykey support can also run debugging commands: call any service, read the codes stored on your locks, and watch events. Turn it on only while Staykey support is helping you, and off again afterwards
 
 ## Troubleshooting
 

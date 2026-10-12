@@ -9,13 +9,26 @@
           "gateway_token": "Gateway Token",
           "gateway_url": "Gateway URL"
         }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate Staykey",
+        "description": "Staykey didn't accept this entry's gateway token. Paste the current token from your Staykey dashboard (Properties > Integrations > Home Assistant). If you haven't changed it, this prompt closes on its own once Staykey accepts the token again.",
+        "data": {
+          "gateway_token": "Gateway Token"
+        }
       }
     },
     "error": {
-      "gateway_token_required": "A gateway token is required. Copy it from your Staykey dashboard under Properties > Integrations > Home Assistant."
+      "gateway_token_required": "A gateway token is required. Copy it from your Staykey dashboard under Properties > Integrations > Home Assistant.",
+      "invalid_auth": "Staykey didn't accept this gateway token. Copy it again from your Staykey dashboard (Properties > Integrations > Home Assistant).",
+      "cannot_connect": "Couldn't reach the Staykey gateway. Check your internet connection and the gateway URL, then try again.",
+      "token_in_use": "Another Staykey entry on this Home Assistant already uses this gateway token.",
+      "integration_disabled": "This integration is turned off in your Staykey dashboard. Turn it on there, then try again."
     },
     "abort": {
-      "already_configured": "This integration is already configured."
+      "already_configured": "This integration is already configured.",
+      "reauth_successful": "The new gateway token works. Staykey is reconnecting.",
+      "reauth_retry": "Staykey is trying this gateway token again. If it still isn't accepted, Home Assistant will ask again."
     }
   },
   "options": {
@@ -25,17 +38,20 @@
         "data": {
           "gateway_token": "Gateway Token",
           "gateway_url": "Gateway URL",
-          "verify_ssl": "Verify TLS certificates",
-          "timeout": "Webhook timeout (seconds)",
-          "endpoint_url": "Webhook URL (deprecated - migrate to a gateway token)"
+          "allow_support_actions": "Allow support access"
+        },
+        "data_description": {
+          "allow_support_actions": "Lets Staykey support run debugging commands on this Home Assistant, such as reading your lock codes. Leave it off unless support asks."
         }
       }
+    },
+    "error": {
+      "token_in_use": "Another Staykey entry on this Home Assistant already uses this gateway token."
     }
   },
-  "issues": {
-    "webhook_mode_deprecated": {
-      "title": "Staykey webhook mode is deprecated",
-      "description": "This Staykey integration is configured to forward events over the legacy webhook, which Staykey has retired — lock events sent this way no longer reach Staykey. Copy the gateway token from your Staykey dashboard (Properties > Integrations > Home Assistant) and add it under Settings > Devices & Services > Staykey > Configure. The webhook URL can be removed once the gateway shows Connected."
+  "exceptions": {
+    "gateway_token_required": {
+      "message": "This Staykey entry has no gateway token. Staykey now connects only through its gateway: copy the token from your Staykey dashboard (Properties > Integrations > Home Assistant) and add it under Configure."
     }
   }
 }

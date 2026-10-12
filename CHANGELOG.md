@@ -1,3 +1,54 @@
+## [2.0.0-beta.4](https://github.com/staykey/staykey-ha-plugin/compare/v2.0.0-beta.3...v2.0.0-beta.4) (2026-10-12)
+
+
+### Bug Fixes
+
+* **staykey:** call the option Allow support access and say what it grants ([0dd747b](https://github.com/staykey/staykey-ha-plugin/commit/0dd747bfd6eb134c5d27b504bcdb128ac5bb4e89))
+* **staykey:** state what support access changes, cap event taps at 25 seconds, and log refusals without a traceback ([73de223](https://github.com/staykey/staykey-ha-plugin/commit/73de223f44bb78382d5cc6dcda9960c119388750))
+
+## [2.0.0-beta.3](https://github.com/staykey/staykey-ha-plugin/compare/v2.0.0-beta.2...v2.0.0-beta.3) (2026-10-12)
+
+
+### Features
+
+* **staykey:** check the gateway token when it is entered ([8c6117f](https://github.com/staykey/staykey-ha-plugin/commit/8c6117fb133d0efca97eaf267e405b0732f8a078))
+
+
+### Bug Fixes
+
+* **staykey:** keep retrying a rejected token and clear the prompt when it works ([a354518](https://github.com/staykey/staykey-ha-plugin/commit/a35451825b2ca127bfe36dbe65777ca71f83b8ab))
+* **staykey:** say what re-entering the same token does, and strip the stored token ([c434ae4](https://github.com/staykey/staykey-ha-plugin/commit/c434ae47fe407190ca3e101868d60980088173a9))
+
+## [2.0.0-beta.2](https://github.com/staykey/staykey-ha-plugin/compare/v2.0.0-beta.1...v2.0.0-beta.2) (2026-10-12)
+
+
+### Bug Fixes
+
+* **staykey:** require the gateway token in the options form ([dd72aaa](https://github.com/staykey/staykey-ha-plugin/commit/dd72aaa9461df0aaf2b5b787825f4bfb96d404fd))
+
+## [2.0.0-beta.1](https://github.com/staykey/staykey-ha-plugin/compare/v1.8.1...v2.0.0-beta.1) (2026-10-12)
+
+
+### ⚠ BREAKING CHANGES
+
+* **staykey:** gateway mode is now required. An entry set up with only a webhook URL no longer loads. Copy the gateway token from the Staykey dashboard (Properties > Integrations > Home Assistant) and add it under Settings > Devices & Services > Staykey > Configure.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+* **staykey:** support actions are refused unless the new Allow support actions option is on, and it is off by default. Staykey doesn't need them to run your properties.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+### Features
+
+* **staykey:** remove webhook mode ([a91452c](https://github.com/staykey/staykey-ha-plugin/commit/a91452c2a4e4ba0dbc6a0c20ea548b58e2fe6d29))
+* **staykey:** report the Home Assistant instance id to the gateway ([45d49b9](https://github.com/staykey/staykey-ha-plugin/commit/45d49b9b0877b8d27bd41f115fa1ac2babb7e609))
+* **staykey:** turn off support actions unless the owner allows them ([96840bf](https://github.com/staykey/staykey-ha-plugin/commit/96840bf7af006088b4079dd408f1bab7ffea3923))
+
+
+### Bug Fixes
+
+* **staykey:** resolve lock code actions through the device map ([850a24c](https://github.com/staykey/staykey-ha-plugin/commit/850a24c5b3f8b2b0b8d17cb7a5afc49263b8b987))
+
 ## [1.8.1](https://github.com/staykey/staykey-ha-plugin/compare/v1.8.0...v1.8.1) (2026-10-11)
 
 

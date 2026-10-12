@@ -6,10 +6,11 @@ import asyncio
 import contextlib
 import logging
 from collections.abc import Callable, Coroutine
+from dataclasses import dataclass, field
 from typing import Any
 
 import aiohttp
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntry
 from homeassistant.const import __version__ as HA_VERSION
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
@@ -17,6 +18,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from ..const import GATEWAY_FEATURES
 from ..device_map import DeviceMap
+from ..services.ha_bridge import SupportActionDisabledError
 from . import protocol
 from .event_queue import EventQueue
 
@@ -25,6 +27,136 @@ LOGGER = logging.getLogger(__name__)
 INITIAL_BACKOFF_S = 2
 MAX_BACKOFF_S = 300
 HEARTBEAT_S = 25
+AUTH_TIMEOUT_S = 10
+
+# How a token check ends: the gateway accepted the token, rejected it, found
+# the integration turned off, or could not be asked (no connection, no answer,
+# or any other refusal). All but the first double as the forms' error keys.
+AUTH_OK = "ok"
+AUTH_INVALID = "invalid_auth"
+AUTH_INTEGRATION_DISABLED = "integration_disabled"
+AUTH_CANNOT_CONNECT = "cannot_connect"
+
+# The gateway closes the connection with this code (policy violation) when it
+# refuses a token, giving the reason as an ``auth_failed`` message.
+_REFUSED_CLOSE_CODE = 1008
+_INVALID_TOKEN_MESSAGE = "Invalid token"
+_INTEGRATION_DISABLED_MESSAGE = "Integration is disabled"
+
+
+@dataclass(frozen=True)
+class _AuthResult:
+    outcome: str
+    # Why the token was not accepted, for the log.
+    message: str = ""
+    # The gateway's ``auth_ok`` message, when it accepted the token.
+    response: dict[str, Any] = field(default_factory=dict)
+
+
+def _decode_object(text: Any) -> dict[str, Any] | None:
+    """The JSON object in ``text``, or None if it holds none."""
+    try:
+        decoded = protocol.decode(text)
+    except (TypeError, ValueError):
+        return None
+    return decoded if isinstance(decoded, dict) else None
+
+
+def _refusal(message: str) -> _AuthResult:
+    """Classify an ``auth_failed`` refusal by its message.
+
+    Only "Invalid token" is about the token. A turned-off integration is told
+    apart so the forms can say so. Anything else (the gateway's own auth
+    timeout, or the gateway unable to check tokens) can clear up by itself.
+    """
+    if message == _INVALID_TOKEN_MESSAGE:
+        return _AuthResult(AUTH_INVALID, message)
+    if message == _INTEGRATION_DISABLED_MESSAGE:
+        return _AuthResult(AUTH_INTEGRATION_DISABLED, message)
+    return _AuthResult(AUTH_CANNOT_CONNECT, message)
+
+
+def _classify_close(code: Any, reason: Any) -> _AuthResult:
+    if code != _REFUSED_CLOSE_CODE:
+        return _AuthResult(
+            AUTH_CANNOT_CONNECT,
+            f"gateway closed the connection (code {code}: {reason or 'no reason'})",
+        )
+    detail = _decode_object(reason)
+    if detail is None:
+        # A refusal without a readable reason: the token is what the gateway
+        # checks at this point.
+        return _AuthResult(AUTH_INVALID, f"gateway refused the token ({reason!r})")
+    if detail.get("type") != "auth_failed":
+        return _AuthResult(
+            AUTH_CANNOT_CONNECT, f"gateway closed the connection ({reason})"
+        )
+    return _refusal(str(detail.get("message") or "unknown error"))
+
+
+async def _authenticate(ws: aiohttp.ClientWebSocketResponse, token: str) -> _AuthResult:
+    """Send ``token`` over ``ws`` and classify the gateway's answer.
+
+    Errors sending the token or reading the answer are raised to the caller.
+    """
+    await ws.send_str(protocol.auth_message(token))
+
+    try:
+        msg = await asyncio.wait_for(ws.receive(), timeout=AUTH_TIMEOUT_S)
+    except asyncio.TimeoutError:
+        return _AuthResult(
+            AUTH_CANNOT_CONNECT, f"no auth response within {AUTH_TIMEOUT_S}s"
+        )
+
+    if msg.type == aiohttp.WSMsgType.TEXT:
+        response = _decode_object(msg.data)
+        if response is None:
+            return _AuthResult(AUTH_CANNOT_CONNECT, "unreadable auth response")
+        if response.get("type") == "auth_ok":
+            return _AuthResult(AUTH_OK, response=response)
+        if response.get("type") == "auth_failed":
+            return _refusal(str(response.get("message") or "unknown error"))
+        return _AuthResult(
+            AUTH_CANNOT_CONNECT,
+            f"unexpected auth response type {response.get('type')!r}",
+        )
+
+    if msg.type == aiohttp.WSMsgType.CLOSE:
+        return _classify_close(msg.data, msg.extra)
+
+    return _AuthResult(
+        AUTH_CANNOT_CONNECT,
+        f"unexpected message type during auth: {getattr(msg.type, 'name', msg.type)}",
+    )
+
+
+async def probe_token(hass: HomeAssistant, gateway_url: str, token: str) -> str:
+    """Check ``token`` with the gateway once, then hang up.
+
+    Returns ``AUTH_OK``, ``AUTH_INVALID``, ``AUTH_INTEGRATION_DISABLED`` or
+    ``AUTH_CANNOT_CONNECT``, and never raises. The check sends only the
+    token, never the capabilities, so it sets nothing up. The gateway gives a
+    token's connection to the newest one, so never check a token a running
+    entry uses: closing the check would cut that entry off.
+    """
+    ws: aiohttp.ClientWebSocketResponse | None = None
+    try:
+        ws = await asyncio.wait_for(
+            async_get_clientsession(hass).ws_connect(gateway_url),
+            timeout=AUTH_TIMEOUT_S,
+        )
+        result = await _authenticate(ws, token)
+    except Exception as exc:
+        LOGGER.debug("Gateway token check failed: %r", exc)
+        return AUTH_CANNOT_CONNECT
+    finally:
+        if ws is not None:
+            with contextlib.suppress(Exception):
+                await ws.close()
+
+    if result.outcome != AUTH_OK:
+        LOGGER.debug("Gateway token check: %s (%s)", result.outcome, result.message)
+    return result.outcome
 
 
 class GatewayClient:
@@ -45,6 +177,7 @@ class GatewayClient:
             [str, str, dict[str, Any]], Coroutine[Any, Any, dict[str, Any]]
         ],
         config_entry: ConfigEntry | None = None,
+        instance_id: str | None = None,
     ) -> None:
         self._hass = hass
         self._gateway_url = gateway_url
@@ -53,8 +186,16 @@ class GatewayClient:
         self._device_map = device_map
         self._command_handler = command_handler
         self._config_entry = config_entry
+        # Home Assistant's installation ID, sent with the capabilities on
+        # every connect.
+        self._instance_id = instance_id
         self._ws: aiohttp.ClientWebSocketResponse | None = None
         self._running = False
+        # How the latest connection attempt's token check ended.
+        self._auth_outcome: str | None = None
+        # Set from the first rejection of the token until it is accepted
+        # again: the re-authentication prompt is asked for once per run.
+        self._token_rejected = False
         self._reconnect_task: asyncio.Task | None = None
         self._listen_task: asyncio.Task | None = None
         self._event_queue = EventQueue()
@@ -129,10 +270,16 @@ class GatewayClient:
                 connected = await self._connect_and_auth()
                 if connected:
                     backoff = INITIAL_BACKOFF_S
+                    self._token_accepted()
                     if self._event_queue.size > 0:
                         await self._event_queue.drain(self.send)
                     await self._listen()
                     LOGGER.info("Gateway listen loop ended, will reconnect")
+                elif self._auth_outcome == AUTH_INVALID:
+                    # Ask the owner for a new token, but keep retrying this
+                    # one: a gateway that can't check tokens may say they're
+                    # invalid too.
+                    self._token_refused()
                 else:
                     LOGGER.warning(
                         "Gateway connection/auth failed, retrying in %ds", backoff
@@ -158,8 +305,38 @@ class GatewayClient:
 
         LOGGER.info("Gateway connection loop stopped (running=%s)", self._running)
 
+    def _token_refused(self) -> None:
+        """Ask Home Assistant for a new token, once per run of rejections."""
+        if self._token_rejected:
+            return
+        self._token_rejected = True
+        LOGGER.warning(
+            "Staykey rejected the gateway token; Home Assistant will ask for a"
+            " new one, and the connection keeps retrying meanwhile"
+        )
+        if self._config_entry is not None:
+            self._config_entry.async_start_reauth(self._hass)
+
+    def _token_accepted(self) -> None:
+        """After a run of rejections, close the prompt for a new token."""
+        if not self._token_rejected:
+            return
+        self._token_rejected = False
+        LOGGER.info("Staykey accepted the gateway token again")
+        if self._config_entry is None:
+            return
+        for flow in list(
+            self._config_entry.async_get_active_flows(self._hass, {SOURCE_REAUTH})
+        ):
+            self._hass.config_entries.flow.async_abort(flow["flow_id"])
+
     async def _connect_and_auth(self) -> bool:
+        """Connect and authenticate; True once the gateway accepts the token.
+
+        How the token check ended is left in ``self._auth_outcome``.
+        """
         await self._close_ws()
+        self._auth_outcome = None
 
         session = async_get_clientsession(self._hass)
 
@@ -171,30 +348,21 @@ class GatewayClient:
             )
         except Exception:
             LOGGER.exception("Failed to connect to gateway at %s", self._gateway_url)
+            self._auth_outcome = AUTH_CANNOT_CONNECT
             return False
 
-        await self._ws.send_str(protocol.auth_message(self._gateway_token))
+        result = await _authenticate(self._ws, self._gateway_token)
+        self._auth_outcome = result.outcome
 
-        try:
-            msg = await asyncio.wait_for(self._ws.receive(), timeout=10)
-        except asyncio.TimeoutError:
-            LOGGER.error("Gateway auth response timeout")
+        if result.outcome != AUTH_OK:
+            # A rejected token is reported once per run, by the connection
+            # loop.
+            if result.outcome != AUTH_INVALID:
+                LOGGER.error("Gateway auth failed: %s", result.message)
             await self._close_ws()
             return False
 
-        if msg.type != aiohttp.WSMsgType.TEXT:
-            LOGGER.error("Unexpected message type during auth: %s", msg.type)
-            await self._close_ws()
-            return False
-
-        response = protocol.decode(msg.data)
-
-        if response.get("type") != "auth_ok":
-            LOGGER.error(
-                "Gateway auth failed: %s", response.get("message", "unknown error")
-            )
-            await self._close_ws()
-            return False
+        response = result.response
 
         LOGGER.info(
             "Gateway authenticated (gateway_version=%s)",
@@ -222,6 +390,7 @@ class GatewayClient:
                 protocol_version=1,
                 features=features,
                 tracked_devices=self._device_map.tracked_device_ids,
+                instance_id=self._instance_id,
             )
         )
 
@@ -293,7 +462,11 @@ class GatewayClient:
                 protocol.response_message(request_id, status="ok", data=result)
             )
         except Exception as exc:
-            LOGGER.exception("Command handler error for action=%s", action)
+            if isinstance(exc, SupportActionDisabledError):
+                # The owner's choice, not a fault: no traceback.
+                LOGGER.warning("Refused a support command: %s", exc)
+            else:
+                LOGGER.exception("Command handler error for action=%s", action)
             await self.send(
                 protocol.response_message(
                     request_id,

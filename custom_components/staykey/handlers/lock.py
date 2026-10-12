@@ -126,24 +126,18 @@ async def handle_read_codes(
 
 
 def _resolve_entity_id(device_map: DeviceMap, params: dict[str, Any]) -> str:
-    """Resolve HA entity_id from either ``external_id`` or ``device_id``.
+    """Resolve the HA entity_id for ``params["device_id"]`` via the device map.
 
-    Remote/API requests often send ``external_id`` (the HA ``entity_id``)
-    directly; others send ``device_id`` (a Staykey-side identifier resolved
-    via the device map). Accept both conventions.
+    Only devices Staykey gave this config entry can be reached. A request's
+    ``external_id`` is ignored: an entity ID taken from the request could name
+    any lock on this Home Assistant instance, including one another config
+    entry manages.
     """
-    external_id = params.get("external_id", "")
-    if external_id:
-        return external_id
-
     device_id = params.get("device_id", "")
     entity_id = device_map.get_entity_id(device_id)
-    if entity_id:
-        return entity_id
-
-    raise ValueError(
-        f"Cannot resolve entity: device_id={device_id!r}, external_id={external_id!r}"
-    )
+    if not entity_id:
+        raise ValueError(f"Unknown device_id: {device_id}")
+    return entity_id
 
 
 def _resolve_slot(params: dict[str, Any]) -> int:
