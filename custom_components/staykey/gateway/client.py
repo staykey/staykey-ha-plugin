@@ -45,6 +45,7 @@ class GatewayClient:
             [str, str, dict[str, Any]], Coroutine[Any, Any, dict[str, Any]]
         ],
         config_entry: ConfigEntry | None = None,
+        instance_id: str | None = None,
     ) -> None:
         self._hass = hass
         self._gateway_url = gateway_url
@@ -53,6 +54,9 @@ class GatewayClient:
         self._device_map = device_map
         self._command_handler = command_handler
         self._config_entry = config_entry
+        # Home Assistant's installation ID, sent with the capabilities on
+        # every connect.
+        self._instance_id = instance_id
         self._ws: aiohttp.ClientWebSocketResponse | None = None
         self._running = False
         self._reconnect_task: asyncio.Task | None = None
@@ -222,6 +226,7 @@ class GatewayClient:
                 protocol_version=1,
                 features=features,
                 tracked_devices=self._device_map.tracked_device_ids,
+                instance_id=self._instance_id,
             )
         )
 

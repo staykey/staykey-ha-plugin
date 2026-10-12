@@ -103,6 +103,7 @@ _ensure_module("homeassistant.config_entries")
 _ensure_module("homeassistant.const")
 _ensure_module("homeassistant.helpers.aiohttp_client")
 _ensure_module("homeassistant.helpers.config_validation")
+_ensure_module("homeassistant.helpers.instance_id")
 _ensure_module("homeassistant.helpers.issue_registry")
 _ensure_module("homeassistant.helpers.typing")
 _ensure_module("homeassistant.loader")
@@ -207,6 +208,19 @@ async def _async_get_integration(_hass, _domain):  # noqa: D401 - stub function
 
 
 sys.modules["homeassistant.loader"].async_get_integration = _async_get_integration
+
+
+async def _async_get_instance_id(_hass):  # noqa: D401 - stub function
+    """Stand-in for ``homeassistant.helpers.instance_id.async_get``.
+
+    Home Assistant creates the ID once per installation with
+    ``uuid.uuid4().hex``; this returns a fixed one of the same shape, so every
+    test that runs ``async_setup_entry`` gets one.
+    """
+    return "0f1e2d3c4b5a69788796a5b4c3d2e1f0"
+
+
+sys.modules["homeassistant.helpers.instance_id"].async_get = _async_get_instance_id
 
 
 # The gateway client imports aiohttp and catches its ClientError; only that

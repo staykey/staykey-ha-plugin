@@ -32,6 +32,7 @@ def capabilities_message(
     features: list[str] | None = None,
     platforms: list[str] | None = None,
     tracked_devices: list[str] | None = None,
+    instance_id: str | None = None,
 ) -> str:
     msg: dict[str, Any] = {
         "type": "capabilities",
@@ -42,6 +43,10 @@ def capabilities_message(
         "platforms": platforms or [],
         "tracked_devices": tracked_devices or [],
     }
+    # Home Assistant's installation ID: the same for every Staykey entry on
+    # this Home Assistant, so Staykey can tell when two entries share a lock.
+    if instance_id:
+        msg["instance_id"] = instance_id
     return encode(msg)
 
 

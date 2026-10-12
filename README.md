@@ -77,6 +77,7 @@ The integration connects only through the gateway; webhook mode has been removed
 - Troubleshooting commands (any service call, reading the codes stored on your locks, watching the event bus) are refused unless you turn on **Allow support actions**
 - No passwords, personal data, or network details are shared
 - The gateway token uniquely identifies your Home Assistant instance to your Staykey account
+- Each connection also sends your Home Assistant installation ID, the random identifier Home Assistant creates once when it is installed. Every Staykey entry on the same Home Assistant sends the same ID, which lets Staykey recognise a lock shared by two properties as one lock
 
 ## Troubleshooting
 

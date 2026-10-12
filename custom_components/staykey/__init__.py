@@ -9,6 +9,7 @@ from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant
 from homeassistant.exceptions import ConfigEntryError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import instance_id
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.loader import async_get_integration
 
@@ -69,6 +70,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     integration = await async_get_integration(hass, DOMAIN)
     plugin_version: str = integration.version or "0.0.0"
 
+    # Home Assistant's installation ID, a random identifier it creates once.
+    # Every Staykey entry on this Home Assistant reports the same one, which
+    # is how Staykey recognises a lock that two properties share as one lock.
+    ha_instance_id: str = await instance_id.async_get(hass)
+
     unsubscribers: list[CALLBACK_TYPE] = []
     device_map = DeviceMap()
     command_handler = create_command_handler(
@@ -83,6 +89,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         device_map=device_map,
         command_handler=command_handler,
         config_entry=entry,
+        instance_id=ha_instance_id,
     )
 
     await gateway_client.start()
