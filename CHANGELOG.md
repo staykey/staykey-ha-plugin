@@ -1,3 +1,10 @@
+## [2.0.0-beta.2](https://github.com/staykey/staykey-ha-plugin/compare/v2.0.0-beta.1...v2.0.0-beta.2) (2026-10-12)
+
+
+### Bug Fixes
+
+* **staykey:** require the gateway token in the options form ([dd72aaa](https://github.com/staykey/staykey-ha-plugin/commit/dd72aaa9461df0aaf2b5b787825f4bfb96d404fd))
+
 ## [2.0.0-beta.1](https://github.com/staykey/staykey-ha-plugin/compare/v1.8.1...v2.0.0-beta.1) (2026-10-12)
 
 
