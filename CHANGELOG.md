@@ -1,3 +1,10 @@
+## [2.0.2](https://github.com/staykey/staykey-ha-plugin/compare/v2.0.1...v2.0.2) (2026-10-30)
+
+
+### Bug Fixes
+
+* **staykey:** use only public zwave_js services for Z-Wave locks ([#18](https://github.com/staykey/staykey-ha-plugin/issues/18)) ([950074a](https://github.com/staykey/staykey-ha-plugin/commit/950074afd4d0fbe8a3675c496ec23ba81fdd9b7b))
+
 ## [2.0.1](https://github.com/staykey/staykey-ha-plugin/compare/v2.0.0...v2.0.1) (2026-10-12)
 
 
