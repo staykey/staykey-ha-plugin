@@ -1,16 +1,21 @@
 """Z-Wave LockProvider.
 
-Wraps the existing ``zwave_js`` services and the deep readback path that
-uses ``zwave-js-server-python`` directly to verify a code was actually
-programmed on the lock.  The implementation is unchanged from the
-pre-refactor ``services/zwave.py``; only the public surface is adapted
-to the protocol-agnostic types in :mod:`..lock_provider`.
+Works only through the public ``zwave_js`` services and the entities the
+Z-Wave JS integration exposes; it never touches the integration's driver
+or nodes directly.
+
+* ``set_lock_usercode`` / ``clear_lock_usercode`` write and clear codes.
+* ``get_lock_usercode`` reads code slots from Z-Wave JS's cache.
+* ``invoke_cc_api`` (User Code CC ``get``) asks the lock to report a slot,
+  which is how a write is verified.
+* The node status and statistics sensors feed diagnostics.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import dataclass
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -19,22 +24,38 @@ from homeassistant.helpers import entity_registry as er
 
 from ..lock_provider import CapabilityInfo, ProviderResult, SlotInfo
 
-try:
-    from zwave_js_server.const import CommandClass
-    from zwave_js_server.util.lock import (
-        get_code_slots,  # noqa: F401  # kept for callers that still import it
-        get_usercodes,
-    )
-
-    HAS_ZWAVE_LIB = True
-except ImportError:
-    HAS_ZWAVE_LIB = False
-
 LOGGER = logging.getLogger(__name__)
 
-# ``userIdStatus`` in a User Code CC Report for a slot holding an active code
-# (``CodeSlotStatus.ENABLED`` in zwave-js-server-python).
-_USER_ID_STATUS_ENABLED = 1
+_ZWAVE_DOMAIN = "zwave_js"
+
+# Z-Wave User Code Command Class.
+_USER_CODE_CC = 99
+
+# Pause between asking the lock to report a slot and reading the slot back,
+# so the lock's Report has reached the cache that ``get_lock_usercode`` reads.
+_READBACK_SETTLE_S = 0.5
+
+# Node statistics sensors the Z-Wave JS integration creates for each node
+# (disabled by default; read only when the user has enabled them).
+_STATISTICS_KEYS = (
+    "commands_tx",
+    "commands_rx",
+    "commands_dropped_tx",
+    "commands_dropped_rx",
+    "last_seen",
+)
+
+
+@dataclass(frozen=True)
+class _SlotState:
+    """A code slot as Z-Wave JS last heard it from the lock.
+
+    ``code`` is whatever the lock reported, even for a slot that is not in
+    use, so two reads of an unchanged slot compare equal.
+    """
+
+    occupied: bool
+    code: str | None
 
 
 class ZwaveLockProvider:
@@ -49,7 +70,7 @@ class ZwaveLockProvider:
         slot: int,
         code: str,
     ) -> ProviderResult:
-        """Set a code and verify by actively querying the slot from the lock."""
+        """Set a code, then ask the lock to report the slot to verify it."""
         return await _set_and_verify_code(hass, entity_id, slot, str(code))
 
     async def clear_code(
@@ -60,7 +81,7 @@ class ZwaveLockProvider:
     ) -> ProviderResult:
         """Clear a code slot via ``zwave_js.clear_lock_usercode``."""
         await hass.services.async_call(
-            "zwave_js",
+            _ZWAVE_DOMAIN,
             "clear_lock_usercode",
             {"entity_id": entity_id, "code_slot": slot},
             blocking=True,
@@ -73,8 +94,19 @@ class ZwaveLockProvider:
         entity_id: str,
         max_slots: int = 30,
     ) -> list[SlotInfo]:
-        """Read lock code-slot contents from the cached Z-Wave ValueDB."""
-        return await _read_code_slots(hass, entity_id, max_slots)
+        """Read lock code-slot contents via ``zwave_js.get_lock_usercode``."""
+        slots = await _get_usercodes(hass, entity_id)
+        if not slots:
+            return []
+        return [
+            SlotInfo(
+                slot=slot_num,
+                occupied=state.occupied,
+                code=state.code if state.occupied else None,
+            )
+            for slot_num, state in sorted(slots.items())
+            if slot_num <= max_slots
+        ]
 
     async def get_capabilities(
         self,
@@ -82,13 +114,18 @@ class ZwaveLockProvider:
         entity_id: str,
     ) -> CapabilityInfo:
         info = await get_node_info(hass, entity_id)
-        if not info:
-            return CapabilityInfo(supports_access_codes=False)
+        slots = await _get_usercodes(hass, entity_id)
+        if not slots:
+            return CapabilityInfo(supports_access_codes=False, extra=info or {})
 
+        max_slots = max(slots)
+        extra = dict(info or {})
+        extra["supports_user_codes"] = True
+        extra["max_code_slots"] = max_slots
         return CapabilityInfo(
-            supports_access_codes=bool(info.get("supports_user_codes")),
-            max_slots=info.get("max_code_slots"),
-            extra=info,
+            supports_access_codes=True,
+            max_slots=max_slots,
+            extra=extra,
         )
 
 
@@ -97,226 +134,179 @@ class ZwaveLockProvider:
 # ---------------------------------------------------------------------------
 
 
-def _get_zwave_node_for_entity(hass: HomeAssistant, entity_id: str) -> Any | None:
-    """Look up the Z-Wave node associated with a HA entity via the device registry."""
+def _parse_slot(raw: Any) -> _SlotState | None:
+    if not isinstance(raw, dict):
+        return None
+    code = raw.get("usercode")
+    return _SlotState(
+        occupied=raw.get("in_use") is True,
+        code=str(code) if code else None,
+    )
+
+
+async def _get_usercodes(
+    hass: HomeAssistant, entity_id: str, slot: int | None = None
+) -> dict[int, _SlotState] | None:
+    """Read code slots with ``zwave_js.get_lock_usercode``.
+
+    Reads Z-Wave JS's cache, which only changes when the lock reports a
+    slot: Z-Wave JS does not record a code as set until the lock says so.
+    Returns ``None`` when the service call fails, for example when the
+    slot has never been read from the lock.
+    """
+    data: dict[str, Any] = {"entity_id": entity_id}
+    if slot is not None:
+        data["code_slot"] = slot
     try:
-        entity_reg = er.async_get(hass)
-        entity_entry = entity_reg.async_get(entity_id)
-        if not entity_entry or not entity_entry.device_id:
-            LOGGER.warning(
-                "Z-Wave lookup: no entity registry entry or device_id for %s",
-                entity_id,
-            )
-            return None
-
-        dev_reg = dr.async_get(hass)
-        device = dev_reg.async_get(entity_entry.device_id)
-        if not device:
-            LOGGER.warning(
-                "Z-Wave lookup: no device registry entry for device_id %s",
-                entity_entry.device_id,
-            )
-            return None
-
-        zwave_node_id = None
-        for domain, identifier in device.identifiers:
-            if domain == "zwave_js":
-                parts = identifier.split("-")
-                if len(parts) >= 2:
-                    try:
-                        zwave_node_id = int(parts[1])
-                    except ValueError:
-                        LOGGER.warning(
-                            "Z-Wave lookup: could not parse node_id from %s",
-                            identifier,
-                        )
-                break
-
-        if zwave_node_id is None:
-            return None
-
-        entries = hass.config_entries.async_entries("zwave_js")
-        for config_entry in entries:
-            state_name = (
-                config_entry.state.name
-                if hasattr(config_entry.state, "name")
-                else str(config_entry.state)
-            )
-            if state_name.lower() != "loaded":
-                continue
-            runtime_data = getattr(config_entry, "runtime_data", None)
-            if runtime_data is None:
-                continue
-
-            client = getattr(runtime_data, "client", None)
-            if client is None and isinstance(runtime_data, dict):
-                client = runtime_data.get("client")
-            if client is None and hasattr(runtime_data, "driver"):
-                client = runtime_data
-            if client is None:
-                continue
-
-            driver = getattr(client, "driver", None)
-            if driver is None:
-                continue
-
-            controller = getattr(driver, "controller", None)
-            if controller is None:
-                continue
-
-            nodes = getattr(controller, "nodes", {})
-            if zwave_node_id in nodes:
-                return nodes[zwave_node_id]
-            for key in nodes:
-                if str(key) == str(zwave_node_id):
-                    return nodes[key]
-
-        LOGGER.warning(
-            "Z-Wave lookup: node %d not found in any loaded driver", zwave_node_id
+        response = await hass.services.async_call(
+            _ZWAVE_DOMAIN,
+            "get_lock_usercode",
+            data,
+            blocking=True,
+            return_response=True,
         )
-    except Exception:
-        LOGGER.exception("Z-Wave lookup failed for entity %s", entity_id)
+    except Exception as exc:
+        LOGGER.warning(
+            "zwave_js.get_lock_usercode failed for %s (slot %s): %s",
+            entity_id,
+            slot if slot is not None else "all",
+            exc,
+        )
+        return None
+
+    if not isinstance(response, dict):
+        return None
+    slots = response.get(entity_id, response)
+    if not isinstance(slots, dict):
+        return None
+
+    results: dict[int, _SlotState] = {}
+    for key, raw in slots.items():
+        try:
+            slot_num = int(key)
+        except (TypeError, ValueError):
+            continue
+        state = _parse_slot(raw)
+        if state is not None:
+            results[slot_num] = state
+    return results
+
+
+async def _read_slot(
+    hass: HomeAssistant, entity_id: str, slot: int
+) -> _SlotState | None:
+    slots = await _get_usercodes(hass, entity_id, slot)
+    if not slots:
+        return None
+    return slots.get(slot)
+
+
+async def _request_slot_report(hass: HomeAssistant, entity_id: str, slot: int) -> bool:
+    """Ask the lock to report *slot* with ``zwave_js.invoke_cc_api``.
+
+    The service waits for the lock's Report unless the node is asleep or
+    dead.  Returns ``False`` if the request could not be sent.
+    """
+    try:
+        await hass.services.async_call(
+            _ZWAVE_DOMAIN,
+            "invoke_cc_api",
+            {
+                "entity_id": entity_id,
+                "command_class": _USER_CODE_CC,
+                "method_name": "get",
+                "parameters": [slot],
+            },
+            blocking=True,
+        )
+    except Exception as exc:
+        LOGGER.warning(
+            "zwave_js.invoke_cc_api User Code get failed for %s slot %d: %s",
+            entity_id,
+            slot,
+            exc,
+        )
+        return False
+    return True
+
+
+def _get_zwave_device(
+    hass: HomeAssistant, entity_id: str
+) -> tuple[Any, int | None] | None:
+    """Return the entity's device and its Z-Wave node ID, from the registries."""
+    entity_reg = er.async_get(hass)
+    entity_entry = entity_reg.async_get(entity_id)
+    if not entity_entry or not entity_entry.device_id:
+        return None
+
+    device = dr.async_get(hass).async_get(entity_entry.device_id)
+    if not device:
+        return None
+
+    for domain, identifier in device.identifiers:
+        if domain != _ZWAVE_DOMAIN:
+            continue
+        # Z-Wave JS device identifiers are "<home_id>-<node_id>[-...]".
+        parts = identifier.split("-")
+        try:
+            node_id = int(parts[1]) if len(parts) >= 2 else None
+        except ValueError:
+            node_id = None
+        return device, node_id
+
     return None
 
 
-async def _read_code_slots(
-    hass: HomeAssistant, entity_id: str, max_slots: int = 30
-) -> list[SlotInfo]:
-    if not HAS_ZWAVE_LIB:
-        LOGGER.warning("zwave_js_server library not available for code slot reading")
-        return []
-
-    node = _get_zwave_node_for_entity(hass, entity_id)
-    if not node:
-        LOGGER.warning("No Z-Wave node found for %s", entity_id)
-        return []
-
+def _sensor_value(raw: str) -> Any:
     try:
-        lib_slots = get_usercodes(node)
-        results: list[SlotInfo] = []
-        for s in lib_slots:
-            slot_num = s["code_slot"]
-            if slot_num > max_slots:
-                continue
-            occupied = s.get("in_use") is True
-            code: str | None = None
-            if occupied and s.get("usercode"):
-                code = str(s["usercode"])
-            results.append(SlotInfo(slot=slot_num, occupied=occupied, code=code))
-        return results
-    except Exception:
-        LOGGER.exception("Error reading code slots for %s", entity_id)
-        return []
-
-
-async def _fetch_code_slot(
-    hass: HomeAssistant, entity_id: str, slot: int
-) -> dict[str, Any] | None:
-    """Actively query a single code slot from the lock over Z-Wave.
-
-    Reads the slot from the User Code CC Get's own response, not the
-    driver's ValueDB: when the lock sends no Report, zwave-js returns
-    nothing and the ValueDB still holds whatever was cached before.
-
-    Returns ``None`` if the Get could not be sent, and
-    ``{"responded": False}`` if the lock did not answer it.
-    """
-    if not HAS_ZWAVE_LIB:
-        return None
-
-    node = _get_zwave_node_for_entity(hass, entity_id)
-    if not node:
-        return None
-
-    try:
-        report = await node.async_invoke_cc_api(
-            CommandClass.USER_CODE, "get", slot, wait_for_result=True
-        )
-    except Exception:
-        LOGGER.exception("Error fetching code slot %d for %s", slot, entity_id)
-        return None
-
-    if report is None:
-        return {"slot": slot, "responded": False}
-
-    code = report.get("userCode")
-    return {
-        "slot": slot,
-        "responded": True,
-        "occupied": report.get("userIdStatus") == _USER_ID_STATUS_ENABLED,
-        "code": code if isinstance(code, str) and code else None,
-    }
+        number = float(raw)
+    except (TypeError, ValueError):
+        return raw
+    return int(number) if number.is_integer() else number
 
 
 async def get_node_info(hass: HomeAssistant, entity_id: str) -> dict[str, Any] | None:
-    """Get Z-Wave node information for capability discovery.
+    """Describe the Z-Wave node behind *entity_id* for capability and diagnostics.
 
-    Public helper used by ``handlers/diagnostics.py`` and the legacy
-    capability fallback in ``handlers/capability.py``; returns ``None``
-    on Matter / Wi-Fi / Zigbee devices, which is fine.
+    Built from the device registry and the node status and statistics
+    sensors Z-Wave JS creates.  Returns ``None`` when the entity is not on a
+    Z-Wave JS device (Matter / Wi-Fi / Zigbee), which callers treat as "no
+    Z-Wave details".
     """
-    node = _get_zwave_node_for_entity(hass, entity_id)
-    if not node:
-        return None
-
     try:
+        found = _get_zwave_device(hass, entity_id)
+        if found is None:
+            return None
+        device, node_id = found
+
         info: dict[str, Any] = {
-            "node_id": getattr(node, "node_id", None),
-            "status": str(getattr(node, "status", "unknown")),
-            "ready": getattr(node, "ready", False),
-            "interview_stage": str(getattr(node, "interview_stage", "unknown")),
+            "node_id": node_id,
+            "manufacturer": device.manufacturer,
+            "model": device.model,
+            "firmware": device.sw_version,
         }
 
-        command_classes = []
-        endpoints = getattr(node, "endpoints", {})
-        for endpoint in endpoints.values():
-            values = getattr(endpoint, "values", {})
-            seen_ccs: set = set()
-            for value in values.values():
-                cc = getattr(value, "command_class", None)
-                cc_name = getattr(value, "command_class_name", "")
-                if cc is not None and cc not in seen_ccs:
-                    seen_ccs.add(cc)
-                    command_classes.append({"id": cc, "name": str(cc_name)})
+        statistics: dict[str, Any] = {}
+        entity_reg = er.async_get(hass)
+        for entry in er.async_entries_for_device(entity_reg, device.id):
+            if entry.platform != _ZWAVE_DOMAIN or not entry.unique_id:
+                continue
+            state = hass.states.get(entry.entity_id)
+            if state is None or state.state in ("unknown", "unavailable"):
+                continue
+            if entry.unique_id.endswith(".node_status"):
+                info["status"] = state.state
+                continue
+            for key in _STATISTICS_KEYS:
+                if entry.unique_id.endswith(f".statistics_{key}"):
+                    statistics[key] = _sensor_value(state.state)
+                    break
 
-        info["command_classes"] = command_classes
-
-        if any(cc["id"] == 99 for cc in command_classes):
-            info["supports_user_codes"] = True
-            for endpoint in endpoints.values():
-                values = getattr(endpoint, "values", {})
-                for value in values.values():
-                    if (
-                        getattr(value, "command_class", None) == 99
-                        and getattr(value, "property_name", "") == "userCode"
-                    ):
-                        max_slot = max(
-                            (
-                                getattr(v, "property_key", 0)
-                                for v in values.values()
-                                if getattr(v, "command_class", None) == 99
-                                and getattr(v, "property_name", "") == "userCode"
-                                and isinstance(getattr(v, "property_key", None), int)
-                            ),
-                            default=0,
-                        )
-                        info["max_code_slots"] = max_slot
-                        break
-
-        stats = getattr(node, "statistics", None)
-        if stats:
-            info["statistics"] = {
-                "commands_tx": getattr(stats, "commands_tx", 0),
-                "commands_rx": getattr(stats, "commands_rx", 0),
-                "commands_dropped_tx": getattr(stats, "commands_dropped_tx", 0),
-                "commands_dropped_rx": getattr(stats, "commands_dropped_rx", 0),
-                "last_seen": str(getattr(stats, "last_seen", "")),
-            }
-
+        if statistics:
+            info["statistics"] = statistics
         return info
-
     except Exception:
-        LOGGER.exception("Error getting node info for %s", entity_id)
+        LOGGER.exception("Error getting Z-Wave node info for %s", entity_id)
         return None
 
 
@@ -328,19 +318,30 @@ async def _set_and_verify_code(
     max_retries: int = 2,
     verify_delay_s: float = 2.0,
 ) -> ProviderResult:
-    """Set a lock code and verify by actively querying the slot from the lock.
+    """Set a lock code and verify it by asking the lock to report the slot.
 
-    Uses node.async_invoke_cc_api to fetch the slot value directly from the
-    lock rather than relying on the passive ValueDB cache, so a lock that
-    does not answer the read-back is reported as such rather than as a
-    readback mismatch.
+    Z-Wave JS only changes a code slot in its cache when the lock reports
+    it, so the slot is read before the write and again after asking the
+    lock for a Report.  A slot that holds the new code was confirmed by the
+    lock.  A slot that is unchanged means the lock either did not answer or
+    still holds what it held before; the two look the same from the public
+    services, so both are reported as "not confirmed".  (If the slot
+    already held the new code before the write, it reads as verified: the
+    lock reported that code earlier.)
     """
     last_error: str | None = None
+
+    # Read once, before the first write: on a retry, a lock that keeps
+    # reporting the same wrong code must still read as a mismatch.
+    try:
+        before = await _read_slot(hass, entity_id, slot)
+    except Exception:
+        before = None
 
     for attempt in range(max_retries + 1):
         try:
             await hass.services.async_call(
-                "zwave_js",
+                _ZWAVE_DOMAIN,
                 "set_lock_usercode",
                 {
                     "entity_id": entity_id,
@@ -352,26 +353,29 @@ async def _set_and_verify_code(
 
             await asyncio.sleep(verify_delay_s)
 
-            result = await _fetch_code_slot(hass, entity_id, slot)
-            if result is None:
+            requested = await _request_slot_report(hass, entity_id, slot)
+            await asyncio.sleep(_READBACK_SETTLE_S)
+            after = await _read_slot(hass, entity_id, slot) if requested else None
+
+            if after is None:
                 last_error = f"Slot {slot} could not be read from lock"
-            elif not result["responded"]:
-                # The slot's contents are unknown, which is not the same as
-                # the lock holding a different code.
-                last_error = f"Slot {slot}: lock did not respond to read-back"
-            elif result["occupied"] and result["code"] == str(code):
+            elif after.occupied and after.code == str(code):
                 return ProviderResult(
                     slot=slot,
                     method="zwave_set_and_verify",
                     verified=True,
                     attempts=attempt + 1,
                 )
+            elif after == before:
+                last_error = (
+                    f"Slot {slot}: lock did not confirm the code "
+                    "(no response, or slot unchanged)"
+                )
             else:
                 # NEVER include raw PINs in error strings — they can appear
                 # in activity history and aggregated logs. Compare lengths only.
-                actual = result["code"]
                 expected_len = len(str(code))
-                actual_len = len(str(actual)) if actual is not None else 0
+                actual_len = len(after.code) if after.code is not None else 0
                 last_error = (
                     f"Slot {slot} readback mismatch (expected_length={expected_len}, "
                     f"actual_length={actual_len})"

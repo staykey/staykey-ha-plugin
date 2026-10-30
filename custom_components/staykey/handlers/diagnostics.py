@@ -39,11 +39,12 @@ async def handle_get_diagnostics(
             state.last_updated.isoformat() if state.last_updated else None
         )
 
+    # Z-Wave details come from the device registry and the node status and
+    # statistics sensors Z-Wave JS creates; statistics sensors are disabled
+    # by default, so they are often absent.
     node_info = await zwave_provider.get_node_info(hass, entity_id)
     if node_info:
         diagnostics["zwave_status"] = node_info.get("status", "unknown")
-        diagnostics["zwave_ready"] = node_info.get("ready", False)
-        diagnostics["interview_stage"] = node_info.get("interview_stage")
         if stats := node_info.get("statistics"):
             diagnostics["commands_tx"] = stats.get("commands_tx", 0)
             diagnostics["commands_rx"] = stats.get("commands_rx", 0)
