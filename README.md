@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/staykey/staykey-ha-plugin/actions/workflows/ci.yml/badge.svg)](https://github.com/staykey/staykey-ha-plugin/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/staykey/staykey-ha-plugin?sort=semver)](https://github.com/staykey/staykey-ha-plugin/releases)
-[![HACS](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
+[![HACS](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://hacs.xyz/)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2026.4%2B-41BDF5.svg)](https://www.home-assistant.io/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -21,18 +21,28 @@ Learn more at [getstaykey.com](https://getstaykey.com).
 ## Requirements
 
 - Home Assistant 2026.4 or newer
-- HACS installed
+- On Home Assistant 2026.4 to 2026.10, HACS installed (2026.11 and newer have the Marketplace built in)
 - A Staykey account with a gateway token (provided by Staykey)
 - Z-Wave JS integration (if managing Z-Wave locks)
 
-## Installation (HACS)
+## Installation
 
-1. In Home Assistant, open **HACS > Integrations > menu (three dots) > Custom repositories**
-2. Add this repository URL, select category **Integration**, and click **Add**
-3. Search for **Staykey** in HACS and click **Install**
-4. Restart Home Assistant
-5. Go to **Settings > Devices & Services > Add Integration > Staykey**
-6. Enter your **Gateway Token** (provided by Staykey)
+Staykey is listed in the Home Assistant community catalog, so you can search for it and install it directly.
+
+### Home Assistant 2026.11 and newer (Marketplace)
+
+1. Go to **Settings > Marketplace**
+2. Search for **Staykey** and select **Install**
+3. When the setup flow opens, enter your **Gateway Token** (provided by Staykey)
+
+### Home Assistant 2026.4 to 2026.10 (HACS)
+
+1. Open **HACS**, search for **Staykey**, and select **Download**
+2. Restart Home Assistant
+3. Go to **Settings > Devices & Services > Add Integration > Staykey**
+4. Enter your **Gateway Token** (provided by Staykey)
+
+If you added this repository as a custom repository before it was listed, you don't need to do anything: your install switches over to the catalog listing and keeps getting updates.
 
 **Manual install:** copy `custom_components/staykey` into your Home Assistant `config/custom_components` directory and restart.
 
@@ -103,5 +113,5 @@ This repository uses semantic versioning with automated releases:
 1. Merge commits to `main` using [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `chore:`, etc.)
 2. The release workflow computes the next version, updates `CHANGELOG.md` and `manifest.json`, creates a GitHub release, and tags it
 
-HACS detects new releases automatically from GitHub tags.
+The Marketplace and HACS pick up new releases automatically from GitHub releases.
 

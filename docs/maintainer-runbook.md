@@ -80,7 +80,7 @@ Recurring upkeep for the repository:
 
 ## Submitting to the HACS default store
 
-Today the integration installs as a HACS **custom repository**: users add the repository URL by hand. Listing it in the HACS default store puts it in the community catalog, so users can search for and install it directly. From Home Assistant 2026.11, HACS is built into Home Assistant as the **Marketplace**, which uses the same catalog. In the Marketplace, adding a custom repository requires connecting a GitHub account, so a catalog listing matters more from that release on. When the catalog starts listing a repository that users added as a custom repository, HACS and the Marketplace switch those installs over automatically.
+The integration has been listed in the HACS default store since November 2026 ([hacs/default#11825](https://github.com/hacs/default/pull/11825)). This section records how the listing was made and what keeps it valid. The listing puts the integration in the community catalog, so users can search for and install it directly. From Home Assistant 2026.11, HACS is built into Home Assistant as the **Marketplace**, which uses the same catalog. In the Marketplace, adding a custom repository requires connecting a GitHub account, so a catalog listing matters more from that release on. When the catalog starts listing a repository that users added as a custom repository, HACS and the Marketplace switch those installs over automatically.
 
 Listing is a one-time pull request to the `hacs/default` repository.
 
@@ -104,4 +104,8 @@ Validation runs on every PR, push to `main`, and weekly in `.github/workflows/va
 
 ### After submitting
 
-HACS maintainers review submissions in order, and the queue can take several months. Keep the Validate workflow green while the PR is open, because a failing check gets the PR moved back to draft. Once it merges, the repository appears in the next catalog scan. Then update the installation steps in `README.md` and the badge, replacing the custom-repository instructions with a search for **Staykey** in HACS or the Marketplace.
+HACS maintainers review submissions in order, and the queue can take several months. Keep the Validate workflow green while the PR is open, because a failing check gets the PR moved back to draft. Once it merges, the repository appears in the next catalog scan.
+
+### Staying listed
+
+Keep the Validate workflow green, and keep publishing full GitHub releases rather than bare tags, because HACS and the Marketplace offer updates from releases.
