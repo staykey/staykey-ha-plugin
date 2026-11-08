@@ -62,6 +62,25 @@ docs(readme): clarify HACS install steps
 ci: pin setup-python to 3.13
 ```
 
+### Release notes
+
+Release notes are generated from the squash commit, which is the PR title.
+`feat:` and `fix:` titles appear in the notes that Home Assistant users see
+when they update, so write them for those users: say what changes for them,
+not how the code changed.
+
+| Instead of | Write |
+|------------|-------|
+| `fix(staykey): use only public zwave_js services for Z-Wave locks` | `fix(staykey): keep Z-Wave lock codes working across Home Assistant updates` |
+| `fix(staykey): pass HACS and hassfest validation` | `ci: pass HACS and hassfest validation` (no user-facing change) |
+
+When a change needs the user to do something, say exactly what in the
+`BREAKING CHANGE:` footer, for example where to find a new option and what it
+turns on.
+
+Changes users won't notice (tooling, tests, refactors, docs) use `chore:`,
+`ci:`, `test:`, `refactor:` or `docs:` and stay out of the notes.
+
 ## Branch & release flow
 
 - Open pull requests against `main`.
