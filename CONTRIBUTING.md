@@ -64,10 +64,11 @@ ci: pin setup-python to 3.13
 
 ### Release notes
 
-Release notes are generated from the squash commit, which is the PR title.
-`feat:` and `fix:` titles appear in the notes that Home Assistant users see
-when they update, so write them for those users: say what changes for them,
-not how the code changed.
+Release notes are generated from the squash commit's title: the PR title, or
+the commit subject when the PR has a single commit. Make both read the way you
+want the note to read. `feat:` and `fix:` titles appear in the notes that
+Home Assistant users see when they update, so write them for those users: say
+what changes for them, not how the code changed.
 
 | Instead of | Write |
 |------------|-------|
